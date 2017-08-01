@@ -1,0 +1,13 @@
+(library
+ ((name protocol)
+  (public_name bitcoin.protocol)
+  (preprocess (pps (ppx_cstruct)))
+  (modules (protocol))
+  (libraries (ptime cstruct ocplib-endian))))
+
+(library
+ ((name p2p)
+  (public_name bitcoin.p2p)
+  (preprocess (pps (ppx_cstruct)))
+  (modules (p2p))
+  (libraries (ptime cstruct ocplib-endian))))
