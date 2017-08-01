@@ -3,17 +3,7 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
-module Hash = struct
-  type t = Hash of string
-
-  let of_string s =
-    if String.length s <> 32 then invalid_arg "Hash.of_string" else Hash s
-
-  let to_string (Hash s) = s
-
-  let of_cstruct cs =
-    Hash (Cstruct.copy cs 0 32)
-end
+open Util
 
 module BlockHeader = struct
   module C = struct
@@ -42,10 +32,7 @@ module BlockHeader = struct
     let version = get_t_version cs in
     let prev_block = get_t_prev_block cs |> Hash.of_cstruct in
     let merkle_root = get_t_merkle_root cs |> Hash.of_cstruct in
-    let timestamp =
-      match get_t_timestamp cs |> Int32.to_float |> Ptime.of_float_s with
-      | None -> invalid_arg "BlockHeader.read: wrong timestamp"
-      | Some ts -> ts in
+    let timestamp = get_t_timestamp cs |> Timestamp.of_int32 in
     let bits = get_t_bits cs in
     let nonce = get_t_nonce cs in
     { version ; prev_block ; merkle_root ; timestamp ; bits ; nonce }

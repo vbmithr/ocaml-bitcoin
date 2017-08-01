@@ -3,6 +3,8 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
+open Util
+
 module Network = struct
   type t =
     | Mainnet
@@ -83,8 +85,7 @@ module MessageName = struct
     | _ -> invalid_arg "MessageName.of_string"
 
   let of_cstruct cs =
-    let msg = Cstruct.to_string cs in
-    of_string String.(sub msg 0 (index msg '\x00'))
+    Cstruct.to_c_string cs |> of_string
 end
 
 module Header = struct
@@ -115,20 +116,74 @@ end
 
 module Version = struct
   module C = struct
-    module C = struct
-      [%%cstruct type t = {
-          version : uint32_t ;
-          services : uint64_t ;
-          timestamp : uint32_t ;
-          recv_services : uint64_t ;
-          recv_ipaddr : uint8_t [@len 16] ;
-          recv_port : uint16_t ;
-          trans_services : uint64_t ;
-          trans_ipaddr : uint8_t [@len 16] ;
-          trans_port : uint16_t ;
-          nonce : uint64_t ;
-        } [@@little_endian]]
-    end
+    [%%cstruct type t = {
+        version : uint32_t ;
+        services : uint64_t ;
+        timestamp : uint32_t ;
+        recv_services : uint64_t ;
+        recv_ipaddr : uint8_t [@len 16] ;
+        recv_port : uint16_t ;
+        trans_services : uint64_t ;
+        trans_ipaddr : uint8_t [@len 16] ;
+        trans_port : uint16_t ;
+        nonce : uint64_t ;
+      } [@@little_endian]]
   end
+
+  module Service = struct
+    type t =
+      | Node_network
+
+    let of_int64 = function
+      | 0L -> []
+      | 1L -> [Node_network]
+      | _ -> invalid_arg "Service.of_int64"
+  end
+
+  type t = {
+    version : int ;
+    services : Service.t list ;
+    timestamp : Ptime.t ;
+    recv_services : Service.t list ;
+    recv_ipaddr : Ipaddr.V6.t ;
+    recv_port : int ;
+    trans_services : Service.t list ;
+    trans_ipaddr : Ipaddr.V6.t ;
+    trans_port : int ;
+    nonce : Int64.t ;
+    user_agent : string ;
+    start_height : int ;
+    relay : bool ;
+  }
+
+  let of_cstruct cs =
+    let open C in
+    let version = get_t_version cs |> Int32.to_int in
+    let services = get_t_services cs |> Service.of_int64 in
+    let timestamp = get_t_timestamp cs |> Timestamp.of_int32 in
+    let recv_services = get_t_recv_services cs |> Service.of_int64 in
+    let recv_ipaddr = get_t_recv_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
+    let recv_port = get_t_recv_port cs in
+    let trans_services = get_t_trans_services cs |> Service.of_int64 in
+    let trans_ipaddr = get_t_trans_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
+    let trans_port = get_t_trans_port cs in
+    let nonce = get_t_nonce cs in
+    let cs = Cstruct.shift cs sizeof_t in
+    let user_agent_size, nb_read = CompactSize.of_cstruct_int cs in
+    let user_agent =
+      match user_agent_size with
+      | 0 -> ""
+      | _ -> Cstruct.(sub cs nb_read user_agent_size |> to_c_string) in
+    let cs = Cstruct.shift cs nb_read in
+    let start_height = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
+    let relay =
+      match Cstruct.get_uint8 cs 4 with
+      | exception _ -> true
+      | 0x01 -> true
+      | 0x00 -> false
+      | _ -> invalid_arg "Version.of_cstruct: unsupported value for relay field" in
+    { version ; services ; timestamp ; recv_services ; recv_ipaddr ; recv_port ;
+      trans_services ; trans_ipaddr ; trans_port ; nonce ; user_agent ; start_height ;
+      relay }
 end
 

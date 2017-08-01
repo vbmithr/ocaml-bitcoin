@@ -2,15 +2,7 @@
    Copyright (c) 2017 Vincent Bernardoff. All rights reserved.
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
-
-module Hash : sig
-  type t = private Hash of string
-
-  val of_string : string -> t
-  val of_cstruct : Cstruct.t -> t
-
-  val to_string : t -> string
-end
+open Util
 
 module BlockHeader : sig
   type t = {
