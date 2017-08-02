@@ -3,6 +3,9 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
+open Util
+open Protocol
+
 module Service : sig
   type t =
     | Node_network
@@ -35,6 +38,26 @@ module Address : sig
   }
 end
 
+module GetObjects : sig
+  type t = {
+    version : int ;
+    hashes : Hash.Set.t ;
+    stop_hash : Hash.t ;
+  }
+end
+
+module Inv : sig
+  type id =
+    | Tx
+    | Block
+    | FilteredBlock
+
+  type t = {
+    id : id ;
+    hash : Hash.t ;
+  }
+end
+
 module Message : sig
   type t =
     | Version of Version.t
@@ -43,5 +66,12 @@ module Message : sig
     | GetAddr
     | Addr of Address.t list
 
-  val of_cstruct : Cstruct.t -> t
+    | GetBlocks of GetObjects.t
+    | GetData of GetObjects.t
+
+    | Block of Block.t
+
+    | Inv of Inv.t list
+
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
 end

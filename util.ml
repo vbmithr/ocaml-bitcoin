@@ -26,7 +26,8 @@ module Hash = struct
     let to_string (Hash s) = s
 
     let of_cstruct cs =
-      Hash (Cstruct.copy cs 0 32)
+      Hash (Cstruct.copy cs 0 32),
+      Cstruct.shift cs 32
   end
   include T
   module Set = Set.Make(T)
@@ -73,14 +74,26 @@ module CompactSize = struct
   let of_cstruct cs =
     let open Cstruct in
     match get_uint8 cs 0 with
-    | 0xFD -> Int (LE.get_uint16 cs 1), 3
-    | 0xFE -> Int32 (LE.get_uint32 cs 1), 5
-    | 0xFF -> Int64 (LE.get_uint64 cs 1), 9
-    | n -> Int n, 1
+    | 0xFD -> Int (LE.get_uint16 cs 1), shift cs 3
+    | 0xFE -> Int32 (LE.get_uint32 cs 1), shift cs 5
+    | 0xFF -> Int64 (LE.get_uint64 cs 1), shift cs 9
+    | n -> Int n, shift cs 1
 
   let of_cstruct_int cs =
     match of_cstruct cs with
-    | Int i, n -> i, n
-    | Int32 i, n -> Int32.to_int i, n
-    | Int64 i, n -> Int64.to_int i, n
+    | Int i, cs -> i, cs
+    | Int32 i, cs -> Int32.to_int i, cs
+    | Int64 i, cs -> Int64.to_int i, cs
+end
+
+module ObjList = struct
+  let rec inner obj_of_cstruct acc cs = function
+    | 0 -> List.rev acc, cs
+    | n ->
+      let obj, cs = obj_of_cstruct cs in
+      inner obj_of_cstruct (obj :: acc) cs (pred n)
+
+  let of_cstruct ~f cs =
+    let nb_addrs, cs = CompactSize.of_cstruct_int cs in
+    inner f [] cs nb_addrs
 end

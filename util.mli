@@ -13,7 +13,7 @@ module Hash : sig
   type t = private Hash of string
 
   val of_string : string -> t
-  val of_cstruct : Cstruct.t -> t
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
 
   val to_string : t -> string
 
@@ -37,12 +37,11 @@ module CompactSize : sig
     | Int32 of Int32.t
     | Int64 of Int64.t
 
-  val of_cstruct : Cstruct.t -> t * int
-  (** [of_cstruct cs] is (t, nb_read) where [nb_read] is the number of
-      bytes read in [cs]. *)
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
+  val of_cstruct_int : Cstruct.t -> int * Cstruct.t
+end
 
-  val of_cstruct_int : Cstruct.t -> int * int
-  (** [of_cstruct_int cs] is (v, nb_read] where [v] is the integer
-      encoded in CompactSize format, and [nb_read] is the number of
-      bytes read in [cs]. *)
+module ObjList : sig
+  val of_cstruct :
+    f:(Cstruct.t -> 'a * Cstruct.t) -> Cstruct.t -> 'a list * Cstruct.t
 end
