@@ -3,13 +3,9 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
-module Cstruct = struct
-  include Cstruct
-
-  let to_c_string cs =
-    let str = to_string cs in
-    String.(sub str 0 (index str '\x00'))
-end
+let c_string_of_cstruct cs =
+  let str = Cstruct.to_string cs in
+  String.(sub str 0 (index str '\x00'))
 
 module Timestamp = struct
   let of_int32 i =
@@ -19,15 +15,38 @@ module Timestamp = struct
 end
 
 module Hash = struct
-  type t = Hash of string
+  module T = struct
+    type t = Hash of string
 
-  let of_string s =
-    if String.length s <> 32 then invalid_arg "Hash.of_string" else Hash s
+    let compare (Hash a) (Hash b) = String.compare a b
 
-  let to_string (Hash s) = s
+    let of_string s =
+      if String.length s <> 32 then invalid_arg "Hash.of_string" else Hash s
 
-  let of_cstruct cs =
-    Hash (Cstruct.copy cs 0 32)
+    let to_string (Hash s) = s
+
+    let of_cstruct cs =
+      Hash (Cstruct.copy cs 0 32)
+  end
+  include T
+  module Set = Set.Make(T)
+  module Map = Map.Make(T)
+end
+
+module Chksum = struct
+  open Digestif.SHA256.Bigstring
+
+  let compute cs =
+    let data = Cstruct.to_bigarray cs in
+    EndianBigstring.BigEndian.get_int32 (digest (digest data)) 0
+
+  let verify ~expected data =
+    expected = compute data
+
+  exception Invalid_checksum
+
+  let verify_exn ~expected data =
+    if expected <> compute data then raise Invalid_checksum
 end
 
 module CompactSize = struct

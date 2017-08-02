@@ -5,7 +5,7 @@
 
 open Util
 
-module BlockHeader = struct
+module Header = struct
   module C = struct
     [%%cstruct type t = {
         version: uint32_t ;
@@ -36,4 +36,15 @@ module BlockHeader = struct
     let bits = get_t_bits cs in
     let nonce = get_t_nonce cs in
     { version ; prev_block ; merkle_root ; timestamp ; bits ; nonce }
+end
+
+module Transaction = struct
+  type t
+end
+
+module Block = struct
+  type t = {
+    header : Header.t ;
+    txns : Transaction.t list ;
+  }
 end

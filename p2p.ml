@@ -85,7 +85,7 @@ module MessageName = struct
     | _ -> invalid_arg "MessageName.of_string"
 
   let of_cstruct cs =
-    Cstruct.to_c_string cs |> of_string
+    c_string_of_cstruct cs |> of_string
 end
 
 module Header = struct
@@ -114,6 +114,16 @@ module Header = struct
     { network ; msgname ; size ; checksum }
 end
 
+module Service = struct
+  type t =
+    | Node_network
+
+  let of_int64 = function
+    | 0L -> []
+    | 1L -> [Node_network]
+    | _ -> invalid_arg "Service.of_int64"
+end
+
 module Version = struct
   module C = struct
     [%%cstruct type t = {
@@ -122,22 +132,12 @@ module Version = struct
         timestamp : uint32_t ;
         recv_services : uint64_t ;
         recv_ipaddr : uint8_t [@len 16] ;
-        recv_port : uint16_t ;
+        recv_port : uint8_t [@len 2];
         trans_services : uint64_t ;
         trans_ipaddr : uint8_t [@len 16] ;
-        trans_port : uint16_t ;
+        trans_port : uint8_t [@len 2] ;
         nonce : uint64_t ;
       } [@@little_endian]]
-  end
-
-  module Service = struct
-    type t =
-      | Node_network
-
-    let of_int64 = function
-      | 0L -> []
-      | 1L -> [Node_network]
-      | _ -> invalid_arg "Service.of_int64"
   end
 
   type t = {
@@ -163,17 +163,17 @@ module Version = struct
     let timestamp = get_t_timestamp cs |> Timestamp.of_int32 in
     let recv_services = get_t_recv_services cs |> Service.of_int64 in
     let recv_ipaddr = get_t_recv_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
-    let recv_port = get_t_recv_port cs in
+    let recv_port = Cstruct.BE.get_uint16 (get_t_recv_port cs) 0 in
     let trans_services = get_t_trans_services cs |> Service.of_int64 in
     let trans_ipaddr = get_t_trans_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
-    let trans_port = get_t_trans_port cs in
+    let trans_port = Cstruct.BE.get_uint16 (get_t_trans_port cs) 0 in
     let nonce = get_t_nonce cs in
     let cs = Cstruct.shift cs sizeof_t in
     let user_agent_size, nb_read = CompactSize.of_cstruct_int cs in
     let user_agent =
       match user_agent_size with
       | 0 -> ""
-      | _ -> Cstruct.(sub cs nb_read user_agent_size |> to_c_string) in
+      | _ -> Cstruct.(sub cs nb_read user_agent_size |> c_string_of_cstruct) in
     let cs = Cstruct.shift cs nb_read in
     let start_height = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
     let relay =
@@ -185,5 +185,122 @@ module Version = struct
     { version ; services ; timestamp ; recv_services ; recv_ipaddr ; recv_port ;
       trans_services ; trans_ipaddr ; trans_port ; nonce ; user_agent ; start_height ;
       relay }
+end
+
+module Address = struct
+  module C = struct
+    [%%cstruct type t = {
+        timestamp : uint32_t ;
+        services : uint64_t ;
+        ipaddr : uint8_t [@len 16] ;
+        port : uint8_t [@len 2];
+      } [@@little_endian]]
+  end
+
+  type t = {
+    timestamp : Ptime.t ;
+    services : Service.t list ;
+    ipaddr : Ipaddr.V6.t ;
+    port : int ;
+  }
+
+  let of_cstruct cs =
+    let open C in
+    let timestamp = get_t_timestamp cs |> Timestamp.of_int32 in
+    let services = get_t_services cs |> Service.of_int64 in
+    let ipaddr = get_t_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
+    let port = Cstruct.BE.get_uint16 (get_t_port cs) 0 in
+    { timestamp ; services ; ipaddr ; port }
+
+  module List = struct
+    let rec read_addr acc cs = function
+      | 0 -> List.rev acc
+      | n ->
+        let addr = of_cstruct cs in
+        let cs = Cstruct.shift cs C.sizeof_t in
+        read_addr (addr :: acc) cs (pred n)
+
+    let of_cstruct cs =
+      let nb_addrs, nb_read = CompactSize.of_cstruct_int cs in
+      let cs = Cstruct.shift cs nb_read in
+      read_addr [] cs nb_addrs
+  end
+end
+
+module GetBlocks = struct
+  type t = {
+    version : int ;
+    hashes : Hash.Set.t ;
+    stop_hash : Hash.t ;
+  }
+
+  let rec read_hash acc cs = function
+    | 0 -> acc
+    | n ->
+      let h = Hash.of_cstruct cs in
+      let cs = Cstruct.shift cs 32 in
+      read_hash (Hash.Set.add h acc) cs (pred n)
+
+  let of_cstruct cs =
+    let open Cstruct in
+    let version = LE.get_uint32 cs 0 |> Int32.to_int in
+    let cs = shift cs 4 in
+    let nb_hashes, nb_read = CompactSize.of_cstruct_int cs in
+    let cs = shift cs nb_read in
+    let hashes = read_hash Hash.Set.empty cs nb_hashes in
+    let cs = shift cs nb_read in
+    let stop_hash = Hash.of_cstruct cs in
+    { version ; hashes ; stop_hash }
+end
+
+module Inv = struct
+  module C = struct
+    [%%cstruct type t = {
+        id : uint32_t ;
+        hash : uint8_t [@len 32] ;
+      } [@@little_endian]]
+  end
+
+  type id =
+    | Tx
+    | Block
+    | FilteredBlock
+
+  let id_of_int32 = function
+    | 1l -> Tx
+    | 2l -> Block
+    | 3l -> FilteredBlock
+    | _ -> invalid_arg "Inv.id_of_int32"
+
+  type t = {
+    id : id ;
+    hash : Hash.t ;
+  }
+
+  let of_cstruct cs =
+    let open C in
+    let id = get_t_id cs |> id_of_int32 in
+    let hash = get_t_hash cs |> Hash.of_cstruct in
+    { id ; hash }
+end
+
+module Message = struct
+  type t =
+    | Version of Version.t
+    | VerAck
+
+    | GetAddr
+    | Addr of Address.t list
+
+  let of_cstruct cs =
+    let h = Header.of_cstruct cs in
+    let payload = Cstruct.sub cs Header.C.sizeof_t h.size in
+    Chksum.verify_exn ~expected:h.checksum payload ;
+    match h.msgname with
+      | Version -> Version (Version.of_cstruct payload)
+      | VerAck -> VerAck
+      | GetAddr -> GetAddr
+      | Addr -> Addr (Address.List.of_cstruct payload)
+      | _ -> failwith "Unsupported"
 end
 

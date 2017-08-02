@@ -3,10 +3,7 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
-module Cstruct : sig
-  include module type of Cstruct
-  val to_c_string : t -> string
-end
+val c_string_of_cstruct : Cstruct.t -> string
 
 module Timestamp : sig
   val of_int32 : Int32.t -> Ptime.t
@@ -19,6 +16,19 @@ module Hash : sig
   val of_cstruct : Cstruct.t -> t
 
   val to_string : t -> string
+
+  module Set : Set.S with type elt = t
+  module Map : Map.S with type key = t
+end
+
+module Chksum : sig
+  val compute : Cstruct.t -> Int32.t
+  val verify : expected:Int32.t -> Cstruct.t -> bool
+
+  exception Invalid_checksum
+
+  val verify_exn : expected:Int32.t -> Cstruct.t -> unit
+    (** @raises Invalid_checksum on error. *)
 end
 
 module CompactSize : sig

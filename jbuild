@@ -3,4 +3,4 @@
   (public_name bitcoin)
   (preprocess (pps (ppx_cstruct)))
   (modules (util p2p protocol))
-  (libraries (ipaddr ptime cstruct ocplib-endian))))
+  (libraries (ipaddr ptime cstruct ocplib-endian digestif.c))))
