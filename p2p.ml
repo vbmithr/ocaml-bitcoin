@@ -3,6 +3,7 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
+open StdLabels
 open Util
 open Protocol
 
@@ -123,6 +124,14 @@ module Service = struct
     | 0L -> []
     | 1L -> [Node_network]
     | _ -> invalid_arg "Service.of_int64"
+
+  let to_int64 = function
+    | Node_network -> 1L
+
+  let to_int64 =
+    List.fold_left ~init:0L ~f:begin fun a l ->
+      Int64.logor a (to_int64 l)
+    end
 end
 
 module Version = struct
@@ -186,6 +195,27 @@ module Version = struct
     { version ; services ; timestamp ; recv_services ; recv_ipaddr ; recv_port ;
       trans_services ; trans_ipaddr ; trans_port ; nonce ; user_agent ; start_height ;
       relay },
+    Cstruct.shift cs 5
+
+  let to_cstruct cs msg =
+    let open C in
+    set_t_version cs (Int32.of_int msg.version) ;
+    set_t_services cs (Service.to_int64 msg.services) ;
+    set_t_timestamp cs (Timestamp.to_int32 msg.timestamp) ;
+    set_t_recv_services cs (Service.to_int64 msg.recv_services) ;
+    set_t_recv_ipaddr (Ipaddr.V6.to_bytes msg.recv_ipaddr) 0 cs ;
+    Cstruct.BE.set_uint16 (get_t_recv_port cs) 0 msg.recv_port ;
+    set_t_trans_services cs (Service.to_int64 msg.trans_services) ;
+    set_t_trans_ipaddr (Ipaddr.V6.to_bytes msg.trans_ipaddr) 0 cs ;
+    Cstruct.BE.set_uint16 (get_t_trans_port cs) 0 msg.trans_port ;
+    set_t_nonce cs msg.nonce ;
+    let cs = Cstruct.shift cs sizeof_t in
+    let user_agent_len = String.length msg.user_agent in
+    let cs = CompactSize.to_cstruct_int cs user_agent_len in
+    Cstruct.blit_from_string msg.user_agent 0 cs 0 user_agent_len ;
+    let cs = Cstruct.shift cs user_agent_len in
+    Cstruct.LE.set_uint32 cs 0 (Int32.of_int msg.start_height) ;
+    Cstruct.set_uint8 cs 4 (if msg.relay then 0x01 else 0x00) ;
     Cstruct.shift cs 5
 end
 
@@ -498,6 +528,10 @@ module Message = struct
     | Reject ->
       let reject, cs = Reject.of_cstruct payload in
       Reject reject, cs
+    | _ -> failwith "Unsupported"
+
+  let to_cstruct cs = function
+    | Version ver -> Version.to_cstruct cs ver
     | _ -> failwith "Unsupported"
 end
 

@@ -6,6 +6,18 @@
 open Util
 open Protocol
 
+module Network : sig
+  type t =
+    | Mainnet
+    | Testnet
+    | Regtest
+
+  val port : t -> int
+  val start_string : t -> Int32.t
+  val max_nBits : t -> Int32.t
+  val of_start_string : Int32.t -> t
+end
+
 module Service : sig
   type t =
     | Node_network
@@ -165,4 +177,5 @@ module Message : sig
     | Reject of Reject.t
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
 end

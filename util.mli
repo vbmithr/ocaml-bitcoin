@@ -7,6 +7,7 @@ val c_string_of_cstruct : Cstruct.t -> string
 
 module Timestamp : sig
   val of_int32 : Int32.t -> Ptime.t
+  val to_int32 : Ptime.t -> Int32.t
 end
 
 module Hash : sig
@@ -39,6 +40,8 @@ module CompactSize : sig
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val of_cstruct_int : Cstruct.t -> int * Cstruct.t
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
+  val to_cstruct_int : Cstruct.t -> int -> Cstruct.t
 end
 
 module ObjList : sig
