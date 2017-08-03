@@ -60,6 +60,8 @@ module Transaction : sig
     tx_out : TxOut.t list ;
     lock_time : LockTime.t ;
   }
+
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
 end
 
 module Block : sig

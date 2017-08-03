@@ -89,7 +89,7 @@ module MessageName = struct
     c_string_of_cstruct cs |> of_string
 end
 
-module Header = struct
+module MessageHeader = struct
   module C = struct
     [%%cstruct type t = {
         start_string : uint32_t ;
@@ -215,7 +215,7 @@ module Address = struct
     { timestamp ; services ; ipaddr ; port }, Cstruct.shift cs sizeof_t
 end
 
-module GetObjects = struct
+module GetHashes = struct
   type t = {
     version : int ;
     hashes : Hash.Set.t ;
@@ -236,6 +236,12 @@ module GetObjects = struct
     let hashes, cs = read_hash Hash.Set.empty cs nb_hashes in
     let stop_hash, cs = Hash.of_cstruct cs in
     { version ; hashes ; stop_hash }, cs
+
+  let of_cstruct_only_hashes cs =
+    let open Cstruct in
+    let nb_hashes, cs = CompactSize.of_cstruct_int cs in
+    let hashes, cs = read_hash Hash.Set.empty cs nb_hashes in
+    hashes, cs
 end
 
 module Inv = struct
@@ -269,6 +275,135 @@ module Inv = struct
     { id ; hash }, Cstruct.shift cs sizeof_t
 end
 
+module PingPong = struct
+  let of_cstruct cs =
+    Cstruct.(LE.get_uint64 cs 0, shift cs 8)
+end
+
+module MerkleBlock = struct
+  type t = {
+    header : Header.t ;
+    txn_count : int ;
+    hashes : Hash.Set.t ;
+    flags : string ;
+  }
+
+  let of_cstruct cs =
+    let header, cs = Header.of_cstruct cs in
+    let txn_count = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
+    let cs = Cstruct.shift cs 4 in
+    let hashes, cs  = GetHashes.of_cstruct_only_hashes cs in
+    let flags_len, cs = CompactSize.of_cstruct_int cs in
+    let flags = Cstruct.(sub cs 0 flags_len |> to_string) in
+    { header ; txn_count ; hashes ; flags }, Cstruct.shift cs flags_len
+end
+
+module FeeFilter = struct
+  let of_cstruct cs =
+    Cstruct.(LE.get_uint64 cs 0, shift cs 8)
+end
+
+module FilterAdd = struct
+  let of_cstruct cs =
+    let nb_bytes, cs = CompactSize.of_cstruct_int cs in
+    Cstruct.(sub cs 0 nb_bytes |> to_string, shift cs nb_bytes)
+end
+
+module FilterLoad = struct
+  type flag =
+    | Update_none
+    | Update_all
+    | Update_p2pkh_only
+
+  let flag_of_int = function
+    | 0 -> Update_none
+    | 1 -> Update_all
+    | 2 -> Update_p2pkh_only
+    | _ -> invalid_arg "FilterLoad.flag_of_int"
+
+  type t = {
+    filter : string ;
+    nb_hash_funcs : int ;
+    tweak : Int32.t ;
+    flag : flag ;
+  }
+
+  let of_cstruct cs =
+    let nb_bytes, cs = CompactSize.of_cstruct_int cs in
+    let filter, cs = Cstruct.(sub cs 0 nb_bytes |> to_string, shift cs nb_bytes) in
+    let nb_hash_funcs = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
+    let tweak = Cstruct.LE.get_uint32 cs 4 in
+    let flag = Cstruct.get_uint8 cs 8 |> flag_of_int in
+    { filter ; nb_hash_funcs ; tweak ; flag }, Cstruct.shift cs 9
+end
+
+module Reject = struct
+  type code =
+    | Decode_error
+    | Invalid_block of Hash.t
+    | Invalid_transaction of Hash.t
+    | Block_version_too_old of Hash.t
+    | Protocol_too_old
+    | Double_spend of Hash.t
+    | Too_many_version_messages
+    | Non_standard_transaction of Hash.t
+    | Dust of Hash.t
+    | Fee_too_low of Hash.t
+    | Wrong_blockchain of Hash.t
+
+  type t = {
+    rejected_message : MessageName.t ;
+    code : code ;
+    reason : string ;
+  }
+
+  let code_of_cs code rejected_message cs =
+    match code, rejected_message with
+    | 0x01, _ -> Decode_error, cs
+    | 0x10, MessageName.Block ->
+      let hash, cs = Hash.of_cstruct cs in
+      Invalid_block hash, cs
+    | 0x10, Tx ->
+      let hash, cs = Hash.of_cstruct cs in
+      Invalid_transaction hash, cs
+    | 0x11, Block ->
+      let hash, cs = Hash.of_cstruct cs in
+      Block_version_too_old hash, cs
+    | 0x11, Version ->
+      Protocol_too_old, cs
+    | 0x12, Tx ->
+      let hash, cs = Hash.of_cstruct cs in
+      Double_spend hash, cs
+    | 0x12, Version ->
+      Too_many_version_messages, cs
+    | 0x40, Tx ->
+      let hash, cs = Hash.of_cstruct cs in
+      Non_standard_transaction hash, cs
+    | 0x41, Tx ->
+      let hash, cs = Hash.of_cstruct cs in
+      Dust hash, cs
+    | 0x42, Tx ->
+      let hash, cs = Hash.of_cstruct cs in
+      Fee_too_low hash, cs
+    | 0x43, Block ->
+      let hash, cs = Hash.of_cstruct cs in
+      Wrong_blockchain hash, cs
+    | _ -> failwith "Unsupported"
+
+  let of_cstruct cs =
+    let msg_name_len, cs = CompactSize.of_cstruct_int cs in
+    let msg_name = Cstruct.(sub cs 0 msg_name_len |> to_string) in
+    let cs = Cstruct.shift cs msg_name_len in
+    let rejected_message = MessageName.of_string msg_name in
+    let code = Cstruct.get_uint8 cs 0 in
+    let cs = Cstruct.shift cs 1 in
+    let reason_len, cs = CompactSize.of_cstruct_int cs in
+    let reason = Cstruct.(sub cs 0 reason_len |> to_string) in
+    let cs = Cstruct.shift cs reason_len in
+    let code, cs = code_of_cs code rejected_message cs in
+    { rejected_message ; code ; reason }, cs
+end
+
 module Message = struct
   type t =
     | Version of Version.t
@@ -277,15 +412,33 @@ module Message = struct
     | GetAddr
     | Addr of Address.t list
 
-    | GetBlocks of GetObjects.t
-    | GetData of GetObjects.t
+    | Ping of Int64.t
+    | Pong of Int64.t
+
+    | GetBlocks of GetHashes.t
+    | GetData of GetHashes.t
+    | GetHeaders of GetHashes.t
 
     | Block of Block.t
+    | MerkleBlock of MerkleBlock.t
+    | Headers of Header.t list
 
     | Inv of Inv.t list
+    | NotFound of Inv.t list
+    | MemPool
+    | SendHeaders
+
+    | Tx of Transaction.t
+    | FeeFilter of Int64.t
+
+    | FilterAdd of string
+    | FilterClear
+    | FilterLoad of FilterLoad.t
+
+    | Reject of Reject.t
 
   let of_cstruct cs =
-    let h, cs = Header.of_cstruct cs in
+    let h, cs = MessageHeader.of_cstruct cs in
     let payload = Cstruct.sub cs 0 h.size in
     Chksum.verify_exn ~expected:h.checksum payload ;
     match h.msgname with
@@ -297,18 +450,54 @@ module Message = struct
     | Addr ->
       let addrs, cs = ObjList.of_cstruct ~f:Address.of_cstruct payload in
       Addr addrs, cs
+    | Ping ->
+      let nonce, cs = PingPong.of_cstruct payload in
+      Ping nonce, cs
+    | Pong ->
+      let nonce, cs = PingPong.of_cstruct payload in
+      Pong nonce, cs
     | GetBlocks ->
-      let objs, cs = GetObjects.of_cstruct payload in
+      let objs, cs = GetHashes.of_cstruct payload in
       GetBlocks objs, cs
     | GetData ->
-      let objs, cs = GetObjects.of_cstruct payload in
+      let objs, cs = GetHashes.of_cstruct payload in
       GetData objs, cs
+    | GetHeaders ->
+      let objs, cs = GetHashes.of_cstruct payload in
+      GetHeaders objs, cs
     | Block ->
       let block, cs = Block.of_cstruct payload in
       Block block, cs
+    | MerkleBlock ->
+      let mblock, cs = MerkleBlock.of_cstruct payload in
+      MerkleBlock mblock, cs
+    | Headers ->
+      let hdrs, cs = ObjList.of_cstruct ~f:Header.of_cstruct payload in
+      Headers hdrs, cs
     | Inv ->
       let invs, cs = ObjList.of_cstruct ~f:Inv.of_cstruct payload in
       Inv invs, cs
+    | NotFound ->
+      let invs, cs = ObjList.of_cstruct ~f:Inv.of_cstruct payload in
+      NotFound invs, cs
+    | MemPool -> MemPool, cs
+    | SendHeaders -> SendHeaders, cs
+    | Tx ->
+      let tx, cs = Transaction.of_cstruct payload in
+      Tx tx, cs
+    | FeeFilter ->
+      let fee, cs = FeeFilter.of_cstruct payload in
+      FeeFilter fee, cs
+    | FilterAdd ->
+      let filter, cs = FilterAdd.of_cstruct payload in
+      FilterAdd filter, cs
+    | FilterClear -> FilterClear, cs
+    | FilterLoad ->
+      let filter, cs = FilterLoad.of_cstruct payload in
+      FilterLoad filter, cs
+    | Reject ->
+      let reject, cs = Reject.of_cstruct payload in
+      Reject reject, cs
     | _ -> failwith "Unsupported"
 end
 
