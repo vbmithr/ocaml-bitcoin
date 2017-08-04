@@ -7,7 +7,7 @@ let c_string_of_cstruct cs =
   let str = Cstruct.to_string cs in
   String.(sub str 0 (index str '\x00'))
 
-let bytes_with_msg msg len =
+let bytes_with_msg ~len msg =
   let buf = Bytes.make len '\x00' in
   String.(blit msg 0 buf 0 (min (length buf - 1) (length msg)));
   buf

@@ -4,6 +4,7 @@
   ---------------------------------------------------------------------------*)
 
 val c_string_of_cstruct : Cstruct.t -> string
+val bytes_with_msg : len:int -> string -> Bytes.t
 
 module Timestamp : sig
   val of_int32 : Int32.t -> Ptime.t

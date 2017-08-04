@@ -167,7 +167,8 @@ module MessageHeader = struct
   let to_cstruct cs t =
     let open C in
     set_t_start_string cs (Network.start_string t.network) ;
-    set_t_command_name (MessageName.to_string t.msgname) 0 cs ;
+    set_t_command_name
+      (MessageName.to_string t.msgname |> bytes_with_msg ~len:12) 0 cs ;
     set_t_payload_size cs (Int32.of_int t.size) ;
     set_t_checksum cs t.checksum ;
     Cstruct.shift cs sizeof_t

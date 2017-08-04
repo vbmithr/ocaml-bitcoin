@@ -3,6 +3,8 @@ open Async
 open Bitcoin
 open Log.Global
 
+let network = ref P2p.Network.Mainnet
+
 let write_cstruct w (cs : Cstruct.t) =
   Writer.write_bigstring w cs.buffer ~pos:cs.off ~len:cs.len
 
@@ -29,13 +31,16 @@ let buf = Cstruct.create 4096
 let main_loop port s r w =
   let open P2p in
   info "Connected!" ;
-  (* Message.to_cstruct buf (Version (Version.create ~recv_port:port ~trans_port:port ())) ; *)
+  let cs = Message.to_cstruct ~network:!network
+      buf (Version (Version.create ~recv_port:port ~trans_port:port ())) in
+  write_cstruct w (Cstruct.sub buf 0 cs.off) ;
   Reader.read_one_chunk_at_a_time r ~handle_chunk >>= function
   | `Eof -> Deferred.unit
   | `Eof_with_unconsumed_data data -> Deferred.unit
   | `Stopped v -> Deferred.unit
 
 let main testnet port daemon datadir rundir logdir loglevel () =
+  if testnet then network := P2p.Network.Testnet ;
   let host = match testnet with
     | true -> List.hd_exn P2p.Network.(seed Testnet)
     | false -> List.hd_exn P2p.Network.(seed Mainnet) in
