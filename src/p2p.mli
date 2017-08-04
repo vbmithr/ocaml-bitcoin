@@ -121,7 +121,7 @@ module MessageName : sig
 end
 
 module Reject : sig
-    type code =
+  type code =
     | Decode_error
     | Invalid_block of Hash.t
     | Invalid_transaction of Hash.t
