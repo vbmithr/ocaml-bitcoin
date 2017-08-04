@@ -13,6 +13,17 @@ module Network = struct
     | Testnet
     | Regtest
 
+  let seed = function
+    | Mainnet -> [
+        "seed.bitcoin.sipa.be" ;
+        "dnsseed.bluematt.me" ;
+      ]
+    | Testnet -> [
+        "seed.tbtc.petertodd.org" ;
+        "testnet-seed.bitcoin.jonasschnelli.ch" ;
+      ]
+    | _ -> invalid_arg "Network.seed"
+
   let port = function
     | Mainnet -> 8333
     | Testnet -> 18333
@@ -211,6 +222,25 @@ module Version = struct
     start_height : int ;
     relay : bool ;
   }
+
+  let create
+      ?(version=70015)
+      ?(services=[])
+      ?(timestamp=Ptime_clock.now ())
+      ?(recv_services=[Service.Node_network])
+      ?(recv_ipaddr=Ipaddr.V6.localhost)
+      ~recv_port
+      ?(trans_services=[])
+      ?(trans_ipaddr=Ipaddr.V6.localhost)
+      ~trans_port
+      ?(nonce=Int64.of_int (Random.bits ()))
+      ?(user_agent="/OCamlBitcoin:0.1/")
+      ?(start_height=0)
+      ?(relay=true)
+      () =
+    { version ; services ; timestamp ; recv_services ;
+      recv_ipaddr ; recv_port ; trans_services ; trans_ipaddr ;
+      trans_port ; nonce ; user_agent ; start_height ; relay }
 
   let of_cstruct cs =
     let open C in
@@ -512,6 +542,7 @@ module Message = struct
     | FilterLoad of FilterLoad.t
 
     | Reject of Reject.t
+  [@@deriving sexp]
 
   let of_cstruct cs =
     let h, cs = MessageHeader.of_cstruct cs in

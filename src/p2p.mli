@@ -13,6 +13,7 @@ module Network : sig
     | Regtest
 
   val port : t -> int
+  val seed : t -> string list
   val start_string : t -> Int32.t
   val max_nBits : t -> Int32.t
   val of_start_string : Int32.t -> t
@@ -39,6 +40,12 @@ module Version : sig
     start_height : int ;
     relay : bool ;
   }
+
+  val create :
+    ?version:int -> ?services:Service.t list -> ?timestamp:Ptime.t ->
+    ?recv_services:Service.t list -> ?recv_ipaddr:Ipaddr.V6.t -> recv_port:int ->
+    ?trans_services:Service.t list -> ?trans_ipaddr:Ipaddr.V6.t -> trans_port:int ->
+    ?nonce:Int64.t -> ?user_agent:string -> ?start_height:int -> ?relay:bool -> unit -> t
 end
 
 module Address : sig

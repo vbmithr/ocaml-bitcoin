@@ -1,20 +1,51 @@
 open Core
 open Async
 open Bitcoin
+open Log.Global
 
-let dns_seed = "seed.bitcoin.sipa.be"
+let write_cstruct w (cs : Cstruct.t) =
+  Writer.write_bigstring w cs.buffer ~pos:cs.off ~len:cs.len
 
-let main_loop s r w =
+let process_msg = function
+  | P2p.Message.Version v ->
+    debug "%s" "Got Version!" ;
+  | _ -> ()
+
+let rec consume_cs cs =
   let open P2p in
-  Deferred.unit
+  let msg, cs = Message.of_cstruct cs in
+  process_msg msg ;
+  if cs.Cstruct.off < cs.len then consume_cs cs
+
+let handle_chunk buf ~pos ~len =
+  debug "handle_chunk %d %d" pos len ;
+  let open P2p in
+  let cs = Cstruct.of_bigarray buf ~off:pos ~len in
+  consume_cs cs ;
+  return `Continue
+
+let buf = Cstruct.create 4096
+
+let main_loop port s r w =
+  let open P2p in
+  info "Connected!" ;
+  (* Message.to_cstruct buf (Version (Version.create ~recv_port:port ~trans_port:port ())) ; *)
+  Reader.read_one_chunk_at_a_time r ~handle_chunk >>= function
+  | `Eof -> Deferred.unit
+  | `Eof_with_unconsumed_data data -> Deferred.unit
+  | `Stopped v -> Deferred.unit
 
 let main testnet port daemon datadir rundir logdir loglevel () =
+  let host = match testnet with
+    | true -> List.hd_exn P2p.Network.(seed Testnet)
+    | false -> List.hd_exn P2p.Network.(seed Mainnet) in
   let port = match testnet, port with
     | _, Some port -> port
     | true, None -> P2p.Network.(port Testnet)
     | false, None -> P2p.Network.(port Mainnet) in
   stage begin fun `Scheduler_started ->
-    Tcp.(with_connection (to_host_and_port dns_seed port) main_loop)
+    info "Connecting to %s:%d" host port ;
+    Tcp.(with_connection (to_host_and_port host port) (main_loop port))
   end
 
 let command =
