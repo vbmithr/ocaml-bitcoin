@@ -86,6 +86,31 @@ module MessageName = struct
     | "version" -> Version
     | _ -> invalid_arg "MessageName.of_string"
 
+  let to_string = function
+    | Block -> "block"
+    | GetBlocks -> "getblocks"
+    | GetData -> "getdata"
+    | GetHeaders -> "getheaders"
+    | Headers -> "headers"
+    | Inv -> "inv"
+    | MemPool -> "mempool"
+    | MerkleBlock -> "merkleblock"
+    | NotFound -> "notfound"
+    | Tx -> "tx"
+    | Addr -> "addr"
+    | Alert -> "alert"
+    | FeeFilter -> "feefilter"
+    | FilterAdd -> "filteradd"
+    | FilterClear -> "filterclear"
+    | FilterLoad -> "filterload"
+    | GetAddr -> "getaddr"
+    | Ping -> "ping"
+    | Pong -> "pong"
+    | Reject -> "reject"
+    | SendHeaders -> "sendheaders"
+    | VerAck -> "verack"
+    | Version -> "version"
+
   let of_cstruct cs =
     c_string_of_cstruct cs |> of_string
 end
@@ -107,6 +132,19 @@ module MessageHeader = struct
     checksum : Int32.t ;
   }
 
+  let length = C.sizeof_t
+  let empty_checksum = 0x5df6e0e2l
+
+  let version ~network = {
+    network ; msgname = Version ;
+    size = 0 ; checksum = 0l ;
+  }
+
+  let verack ~network = {
+    network ; msgname = VerAck ;
+    size = 0 ; checksum = empty_checksum ;
+  }
+
   let of_cstruct cs =
     let open C in
     let network = get_t_start_string cs |> Network.of_start_string in
@@ -114,6 +152,14 @@ module MessageHeader = struct
     let size = get_t_payload_size cs |> Int32.to_int in
     let checksum = get_t_checksum cs in
     { network ; msgname ; size ; checksum }, Cstruct.shift cs sizeof_t
+
+  let to_cstruct cs t =
+    let open C in
+    set_t_start_string cs (Network.start_string t.network) ;
+    set_t_command_name (MessageName.to_string t.msgname) 0 cs ;
+    set_t_payload_size cs (Int32.of_int t.size) ;
+    set_t_checksum cs t.checksum ;
+    Cstruct.shift cs sizeof_t
 end
 
 module Service = struct
@@ -530,8 +576,16 @@ module Message = struct
       Reject reject, cs
     | _ -> failwith "Unsupported"
 
-  let to_cstruct cs = function
-    | Version ver -> Version.to_cstruct cs ver
+  let to_cstruct ~network cs = function
+    | Version ver ->
+      let hdr = MessageHeader.version ~network in
+      let payload_cs = Cstruct.shift cs MessageHeader.length in
+      let end_cs = Version.to_cstruct payload_cs ver in
+      let size, checksum = Chksum.compute' payload_cs end_cs in
+      let _ = MessageHeader.to_cstruct cs { hdr with size ; checksum } in
+      end_cs
+    | VerAck ->
+      MessageHeader.(to_cstruct cs (verack ~network))
     | _ -> failwith "Unsupported"
 end
 

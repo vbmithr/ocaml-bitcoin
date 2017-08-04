@@ -24,6 +24,7 @@ end
 
 module Chksum : sig
   val compute : Cstruct.t -> Int32.t
+  val compute' : Cstruct.t -> Cstruct.t -> int * Int32.t
   val verify : expected:Int32.t -> Cstruct.t -> bool
 
   exception Invalid_checksum

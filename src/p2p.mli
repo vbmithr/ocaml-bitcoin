@@ -177,5 +177,5 @@ module Message : sig
     | Reject of Reject.t
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
-  val to_cstruct : Cstruct.t -> t -> Cstruct.t
+  val to_cstruct : network:Network.t -> Cstruct.t -> t -> Cstruct.t
 end

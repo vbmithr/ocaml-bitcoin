@@ -48,6 +48,10 @@ module Chksum = struct
     let data = Cstruct.to_bigarray cs in
     EndianBigstring.BigEndian.get_int32 (digest (digest data)) 0
 
+  let compute' cs_start cs_end =
+    let size = cs_end.Cstruct.off - cs_start.Cstruct.off in
+    size, compute (Cstruct.sub cs_start 0 size)
+
   let verify ~expected data =
     expected = compute data
 
