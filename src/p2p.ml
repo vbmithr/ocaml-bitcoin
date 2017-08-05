@@ -30,9 +30,9 @@ module Network = struct
     | Regtest -> 18444
 
   let start_string = function
-    | Mainnet -> 0xf9beb4d9l
-    | Testnet -> 0x0b110907l
-    | Regtest -> 0xfabfb5dal
+    | Mainnet -> "\xf9\xbe\xb4\xd9"
+    | Testnet -> "\x0b\x11\x09\x07"
+    | Regtest -> "\xfa\xbf\xb5\xda"
 
   let max_nBits = function
     | Mainnet -> 0x1d00ffffl
@@ -40,10 +40,13 @@ module Network = struct
     | Regtest -> 0x207fffffl
 
   let of_start_string = function
-    | 0xf9beb4d9l -> Mainnet
-    | 0x0b110907l -> Testnet
-    | 0xfabfb5dal -> Regtest
+    | "\xf9\xbe\xb4\xd9" -> Mainnet
+    | "\x0b\x11\x09\x07" -> Testnet
+    | "\xfa\xbf\xb5\xda" -> Regtest
     | _ -> invalid_arg "Version.of_start_string"
+
+  let of_cstruct cs =
+    of_start_string (Cstruct.to_string cs)
 end
 
 module MessageName = struct
@@ -129,10 +132,10 @@ end
 module MessageHeader = struct
   module C = struct
     [%%cstruct type t = {
-        start_string : uint32_t ;
+        start_string : uint8_t [@len 4] ;
         command_name : uint8_t [@len 12] ;
         payload_size : uint32_t ;
-        checksum : uint32_t ;
+        checksum : uint8_t [@len 4] ;
       } [@@little_endian]]
   end
 
@@ -140,15 +143,15 @@ module MessageHeader = struct
     network : Network.t ;
     msgname : MessageName.t ;
     size : int ;
-    checksum : Int32.t ;
+    checksum : string ;
   }
 
   let length = C.sizeof_t
-  let empty_checksum = 0x5df6e0e2l
+  let empty_checksum = "\x5d\xf6\xe0\xe2"
 
   let version ~network = {
     network ; msgname = Version ;
-    size = 0 ; checksum = 0l ;
+    size = 0 ; checksum = "" ;
   }
 
   let verack ~network = {
@@ -158,19 +161,19 @@ module MessageHeader = struct
 
   let of_cstruct cs =
     let open C in
-    let network = get_t_start_string cs |> Network.of_start_string in
+    let network = get_t_start_string cs |> Network.of_cstruct in
     let msgname = get_t_command_name cs |> MessageName.of_cstruct in
     let size = get_t_payload_size cs |> Int32.to_int in
-    let checksum = get_t_checksum cs in
+    let checksum = get_t_checksum cs |> Cstruct.to_string in
     { network ; msgname ; size ; checksum }, Cstruct.shift cs sizeof_t
 
   let to_cstruct cs t =
     let open C in
-    set_t_start_string cs (Network.start_string t.network) ;
+    set_t_start_string (Network.start_string t.network) 0 cs ;
     set_t_command_name
       (MessageName.to_string t.msgname |> bytes_with_msg ~len:12) 0 cs ;
     set_t_payload_size cs (Int32.of_int t.size) ;
-    set_t_checksum cs t.checksum ;
+    set_t_checksum t.checksum 0 cs ;
     Cstruct.shift cs sizeof_t
 end
 

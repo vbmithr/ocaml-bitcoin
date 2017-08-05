@@ -6,6 +6,7 @@ open Log.Global
 let network = ref P2p.Network.Mainnet
 
 let write_cstruct w (cs : Cstruct.t) =
+  debug "write_cstruct %d %d" cs.off cs.len ;
   Writer.write_bigstring w cs.buffer ~pos:cs.off ~len:cs.len
 
 let process_msg = function
@@ -35,15 +36,22 @@ let main_loop port s r w =
       buf (Version (Version.create ~recv_port:port ~trans_port:port ())) in
   write_cstruct w (Cstruct.sub buf 0 cs.off) ;
   Reader.read_one_chunk_at_a_time r ~handle_chunk >>= function
-  | `Eof -> Deferred.unit
-  | `Eof_with_unconsumed_data data -> Deferred.unit
-  | `Stopped v -> Deferred.unit
+  | `Eof ->
+    info "EOF" ;
+    Deferred.unit
+  | `Eof_with_unconsumed_data data ->
+    info "EOF with unconsumed data" ;
+    Deferred.unit
+  | `Stopped v ->
+    info "Stopped" ;
+    Deferred.unit
 
-let main testnet port daemon datadir rundir logdir loglevel () =
+let main testnet host port daemon datadir rundir logdir loglevel () =
   if testnet then network := P2p.Network.Testnet ;
-  let host = match testnet with
-    | true -> List.hd_exn P2p.Network.(seed Testnet)
-    | false -> List.hd_exn P2p.Network.(seed Mainnet) in
+  let host = match testnet, host with
+    | _, Some host -> host
+    | true, None -> List.hd_exn P2p.Network.(seed Testnet)
+    | false, None -> List.hd_exn P2p.Network.(seed Mainnet) in
   let port = match testnet, port with
     | _, Some port -> port
     | true, None -> P2p.Network.(port Testnet)
@@ -58,6 +66,7 @@ let command =
     let open Command.Spec in
     empty
     +> flag "-testnet" no_arg ~doc:" Use testnet"
+    +> flag "-host" (optional string) ~doc:"string Hostname to use"
     +> flag "-port" (optional int) ~doc:"int TCP port to use"
     +> flag "-daemon" no_arg ~doc:" Run as a daemon"
     +> flag "-datadir" (optional_with_default "data" string) ~doc:"dirname Data directory (data)"

@@ -24,13 +24,13 @@ module Hash : sig
 end
 
 module Chksum : sig
-  val compute : Cstruct.t -> Int32.t
-  val compute' : Cstruct.t -> Cstruct.t -> int * Int32.t
-  val verify : expected:Int32.t -> Cstruct.t -> bool
+  val compute : Cstruct.t -> string
+  val compute' : Cstruct.t -> Cstruct.t -> int * string
+  val verify : expected:string -> Cstruct.t -> bool
 
   exception Invalid_checksum
 
-  val verify_exn : expected:Int32.t -> Cstruct.t -> unit
+  val verify_exn : expected:string -> Cstruct.t -> unit
     (** @raises Invalid_checksum on error. *)
 end
 

@@ -14,9 +14,9 @@ module Network : sig
 
   val port : t -> int
   val seed : t -> string list
-  val start_string : t -> Int32.t
+  val start_string : t -> string
   val max_nBits : t -> Int32.t
-  val of_start_string : Int32.t -> t
+  val of_start_string : string -> t
 end
 
 module Service : sig
