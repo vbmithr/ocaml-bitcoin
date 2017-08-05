@@ -32,6 +32,9 @@ module Hash = struct
 
     let to_string (Hash s) = s
 
+    let pp ppf (Hash s) = Format.fprintf ppf "%s" s
+    let show = to_string
+
     let of_cstruct cs =
       Hash (Cstruct.copy cs 0 32),
       Cstruct.shift cs 32

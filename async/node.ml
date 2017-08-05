@@ -11,8 +11,13 @@ let write_cstruct w (cs : Cstruct.t) =
 
 let process_msg = function
   | P2p.Message.Version v ->
-    debug "%s" "Got Version!" ;
-  | _ -> ()
+    debug "Got Version!" ;
+  | VerAck ->
+    debug "Got VerAck!" ;
+  | Reject rej ->
+    error "%s" (Format.asprintf "%a" P2p.Reject.pp rej)
+  | _ ->
+    debug "Got Unsupported message!"
 
 let rec consume_cs cs =
   let open P2p in
@@ -46,7 +51,13 @@ let main_loop port s r w =
     info "Stopped" ;
     Deferred.unit
 
+let set_loglevel = function
+  | 2 -> set_level `Info
+  | 3 -> set_level `Debug
+  | _ -> ()
+
 let main testnet host port daemon datadir rundir logdir loglevel () =
+  set_loglevel loglevel ;
   if testnet then network := P2p.Network.Testnet ;
   let host = match testnet, host with
     | _, Some host -> host

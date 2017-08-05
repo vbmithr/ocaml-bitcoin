@@ -125,27 +125,38 @@ module MessageName : sig
     | SendHeaders
     | VerAck
     | Version
+
+  val show : t -> string
+
+  val of_string : string -> t
+  val of_cstruct : Cstruct.t -> t
+  val to_string : t -> string
 end
 
 module Reject : sig
-  type code =
-    | Decode_error
-    | Invalid_block of Hash.t
-    | Invalid_transaction of Hash.t
-    | Block_version_too_old of Hash.t
-    | Protocol_too_old
-    | Double_spend of Hash.t
-    | Too_many_version_messages
-    | Non_standard_transaction of Hash.t
-    | Dust of Hash.t
-    | Fee_too_low of Hash.t
-    | Wrong_blockchain of Hash.t
+  module Code : sig
+    type t =
+      | Decode_error
+      | Invalid_block of Hash.t
+      | Invalid_transaction of Hash.t
+      | Block_version_too_old of Hash.t
+      | Protocol_too_old
+      | Double_spend of Hash.t
+      | Too_many_version_messages
+      | Non_standard_transaction of Hash.t
+      | Dust of Hash.t
+      | Fee_too_low of Hash.t
+      | Wrong_blockchain of Hash.t
+  end
 
   type t = {
-    rejected_message : MessageName.t ;
-    code : code ;
+    message : MessageName.t ;
+    code : Code.t ;
     reason : string ;
   }
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
 end

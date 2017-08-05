@@ -14,6 +14,9 @@ end
 module Hash : sig
   type t = private Hash of string
 
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
+
   val of_string : string -> t
   val of_cstruct : Cstruct.t -> t * Cstruct.t
 

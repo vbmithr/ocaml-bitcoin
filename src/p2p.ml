@@ -127,6 +127,11 @@ module MessageName = struct
 
   let of_cstruct cs =
     c_string_of_cstruct cs |> of_string
+
+  let pp ppf s =
+    Format.pp_print_string ppf (to_string s)
+
+  let show = to_string
 end
 
 module MessageHeader = struct
@@ -448,26 +453,53 @@ module FilterLoad = struct
 end
 
 module Reject = struct
-  type code =
-    | Decode_error
-    | Invalid_block of Hash.t
-    | Invalid_transaction of Hash.t
-    | Block_version_too_old of Hash.t
-    | Protocol_too_old
-    | Double_spend of Hash.t
-    | Too_many_version_messages
-    | Non_standard_transaction of Hash.t
-    | Dust of Hash.t
-    | Fee_too_low of Hash.t
-    | Wrong_blockchain of Hash.t
+  module Code = struct
+    type t =
+      | Decode_error
+      | Invalid_block of Hash.t
+      | Invalid_transaction of Hash.t
+      | Block_version_too_old of Hash.t
+      | Protocol_too_old
+      | Double_spend of Hash.t
+      | Too_many_version_messages
+      | Non_standard_transaction of Hash.t
+      | Dust of Hash.t
+      | Fee_too_low of Hash.t
+      | Wrong_blockchain of Hash.t
+
+    let pp ppf = function
+      | Decode_error -> Format.fprintf ppf "decode error"
+      | Invalid_block h -> Format.fprintf ppf "invalid block %a" Hash.pp h
+      | Invalid_transaction h -> Format.fprintf ppf "invalid transaction %a" Hash.pp h
+      | Block_version_too_old h -> Format.fprintf ppf "block version too old %a" Hash.pp h
+      | Protocol_too_old -> Format.fprintf ppf "protocol too old"
+      | Double_spend h -> Format.fprintf ppf "double spend %a" Hash.pp h
+      | Too_many_version_messages -> Format.fprintf ppf "too many version messages"
+      | Non_standard_transaction h -> Format.fprintf ppf "non standard transaction %a" Hash.pp h
+      | Dust h -> Format.fprintf ppf "dust %a" Hash.pp h
+      | Fee_too_low h -> Format.fprintf ppf "fee too low %a" Hash.pp h
+      | Wrong_blockchain h -> Format.fprintf ppf "wrong blockchain %a" Hash.pp h
+
+    let show t =
+      Format.asprintf "%a" pp t
+  end
 
   type t = {
-    rejected_message : MessageName.t ;
-    code : code ;
+    message : MessageName.t ;
+    code : Code.t ;
     reason : string ;
   }
 
+  let pp ppf { message ; code ; reason } =
+    Format.fprintf ppf "Reject %a (%a) (%s)"
+      MessageName.pp message
+      Code.pp code reason
+
+  let show t =
+    Format.asprintf "%a" pp t
+
   let code_of_cs code rejected_message cs =
+    let open Code in
     match code, rejected_message with
     | 0x01, _ -> Decode_error, cs
     | 0x10, MessageName.Block ->
@@ -504,14 +536,14 @@ module Reject = struct
     let msg_name_len, cs = CompactSize.of_cstruct_int cs in
     let msg_name = Cstruct.(sub cs 0 msg_name_len |> to_string) in
     let cs = Cstruct.shift cs msg_name_len in
-    let rejected_message = MessageName.of_string msg_name in
+    let message = MessageName.of_string msg_name in
     let code = Cstruct.get_uint8 cs 0 in
     let cs = Cstruct.shift cs 1 in
     let reason_len, cs = CompactSize.of_cstruct_int cs in
     let reason = Cstruct.(sub cs 0 reason_len |> to_string) in
     let cs = Cstruct.shift cs reason_len in
-    let code, cs = code_of_cs code rejected_message cs in
-    { rejected_message ; code ; reason }, cs
+    let code, cs = code_of_cs code message cs in
+    { message ; code ; reason }, cs
 end
 
 module Message = struct
