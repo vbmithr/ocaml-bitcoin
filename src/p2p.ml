@@ -3,7 +3,6 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
-open StdLabels
 open Util
 open Protocol
 
@@ -96,9 +95,10 @@ module MessageName = struct
     | "ping" -> Ping
     | "pong" -> Pong
     | "reject" -> Reject
+    | "sendheaders" -> SendHeaders
     | "verack" -> VerAck
     | "version" -> Version
-    | _ -> invalid_arg "MessageName.of_string"
+    | s -> invalid_arg ("MessageName.of_string: " ^ s)
 
   let to_string = function
     | Block -> "block"
@@ -184,18 +184,25 @@ end
 
 module Service = struct
   type t =
-    | Node_network
+    | Network
+    | Getutxo
+    | Bloom
 
-  let of_int64 = function
-    | 0L -> []
-    | 1L -> [Node_network]
-    | _ -> invalid_arg "Service.of_int64"
+  let of_int64 v =
+    let open Int64 in
+    Base.List.filter_opt [
+      if logand v 1L <> 0L then Some Network else None ;
+      if logand v 2L <> 0L then Some Getutxo else None ;
+      if logand v 4L <> 0L then Some Bloom else None ;
+    ]
 
   let to_int64 = function
-    | Node_network -> 1L
+    | Network -> 1L
+    | Getutxo -> 2L
+    | Bloom -> 4L
 
   let to_int64 =
-    List.fold_left ~init:0L ~f:begin fun a l ->
+    Base.List.fold_left ~init:0L ~f:begin fun a l ->
       Int64.logor a (to_int64 l)
     end
 end
@@ -205,7 +212,7 @@ module Version = struct
     [%%cstruct type t = {
         version : uint32_t ;
         services : uint64_t ;
-        timestamp : uint32_t ;
+        timestamp : uint64_t ;
         recv_services : uint64_t ;
         recv_ipaddr : uint8_t [@len 16] ;
         recv_port : uint8_t [@len 2];
@@ -236,7 +243,7 @@ module Version = struct
       ?(version=70015)
       ?(services=[])
       ?(timestamp=Ptime_clock.now ())
-      ?(recv_services=[Service.Node_network])
+      ?(recv_services=[Service.Network])
       ?(recv_ipaddr=Ipaddr.V6.localhost)
       ~recv_port
       ?(trans_services=[])
@@ -255,7 +262,7 @@ module Version = struct
     let open C in
     let version = get_t_version cs |> Int32.to_int in
     let services = get_t_services cs |> Service.of_int64 in
-    let timestamp = get_t_timestamp cs |> Timestamp.of_int32 in
+    let timestamp = get_t_timestamp cs |> Timestamp.of_int64 in
     let recv_services = get_t_recv_services cs |> Service.of_int64 in
     let recv_ipaddr = get_t_recv_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
     let recv_port = Cstruct.BE.get_uint16 (get_t_recv_port cs) 0 in
@@ -264,12 +271,7 @@ module Version = struct
     let trans_port = Cstruct.BE.get_uint16 (get_t_trans_port cs) 0 in
     let nonce = get_t_nonce cs in
     let cs = Cstruct.shift cs sizeof_t in
-    let user_agent_size, cs = CompactSize.of_cstruct_int cs in
-    let user_agent =
-      match user_agent_size with
-      | 0 -> ""
-      | _ -> Cstruct.(sub cs 0 user_agent_size |> c_string_of_cstruct) in
-    let cs = Cstruct.shift cs user_agent_size in
+    let user_agent, cs = VarString.of_cstruct cs in
     let start_height = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
     let relay =
       match Cstruct.get_uint8 cs 4 with
@@ -286,7 +288,7 @@ module Version = struct
     let open C in
     set_t_version cs (Int32.of_int msg.version) ;
     set_t_services cs (Service.to_int64 msg.services) ;
-    set_t_timestamp cs (Timestamp.to_int32 msg.timestamp) ;
+    set_t_timestamp cs (Timestamp.to_int64 msg.timestamp) ;
     set_t_recv_services cs (Service.to_int64 msg.recv_services) ;
     set_t_recv_ipaddr (Ipaddr.V6.to_bytes msg.recv_ipaddr) 0 cs ;
     Cstruct.BE.set_uint16 (get_t_recv_port cs) 0 msg.recv_port ;
@@ -295,10 +297,7 @@ module Version = struct
     Cstruct.BE.set_uint16 (get_t_trans_port cs) 0 msg.trans_port ;
     set_t_nonce cs msg.nonce ;
     let cs = Cstruct.shift cs sizeof_t in
-    let user_agent_len = String.length msg.user_agent in
-    let cs = CompactSize.to_cstruct_int cs user_agent_len in
-    Cstruct.blit_from_string msg.user_agent 0 cs 0 user_agent_len ;
-    let cs = Cstruct.shift cs user_agent_len in
+    let cs = VarString.to_cstruct cs msg.user_agent in
     Cstruct.LE.set_uint32 cs 0 (Int32.of_int msg.start_height) ;
     Cstruct.set_uint8 cs 4 (if msg.relay then 0x01 else 0x00) ;
     Cstruct.shift cs 5

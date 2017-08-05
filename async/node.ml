@@ -1,46 +1,61 @@
 open Core
 open Async
-open Bitcoin
+open Bitcoin.Util
+open Bitcoin.Protocol
+open Bitcoin.P2p
 open Log.Global
 
-let network = ref P2p.Network.Mainnet
+let buf = Cstruct.create 4096
+let network = ref Network.Mainnet
+
+let headers : Header.t String.Table.t = String.Table.create ()
 
 let write_cstruct w (cs : Cstruct.t) =
   debug "write_cstruct %d %d" cs.off cs.len ;
   Writer.write_bigstring w cs.buffer ~pos:cs.off ~len:cs.len
 
-let process_msg = function
-  | P2p.Message.Version v ->
-    debug "Got Version!" ;
+let write_cstruct2 w cs cs2 =
+  let len = cs2.Cstruct.off - cs.Cstruct.off in
+  Writer.write_bigstring w cs.buffer ~pos:cs.off ~len
+
+let process_msg w = function
+  | Message.Version { version; services; timestamp; recv_services; recv_ipaddr; recv_port;
+                          trans_services; trans_ipaddr; trans_port; nonce; user_agent; start_height;
+                          relay } ->
+    debug "Got Version %d (%s)" version user_agent ;
+    let cs = Message.to_cstruct ~network:!network buf VerAck in
+    write_cstruct w (Cstruct.sub buf 0 cs.off) ;
+    debug "Sent VerAck"
   | VerAck ->
     debug "Got VerAck!" ;
   | Reject rej ->
-    error "%s" (Format.asprintf "%a" P2p.Reject.pp rej)
+    error "%s" (Format.asprintf "%a" Reject.pp rej)
+  | SendHeaders ->
+    let cs = CompactSize.to_cstruct_int buf (String.Table.length headers) in
+    write_cstruct2 w buf cs ;
+    (* String.Table.iter headers ~f:begin fun h -> *)
+    (*   Header. *)
+    (* end *)
   | _ ->
     debug "Got Unsupported message!"
 
-let rec consume_cs cs =
-  let open P2p in
+let rec consume_cs w cs =
   let msg, cs = Message.of_cstruct cs in
-  process_msg msg ;
-  if cs.Cstruct.off < cs.len then consume_cs cs
+  process_msg w msg ;
+  if cs.Cstruct.off < cs.len then consume_cs w cs
 
-let handle_chunk buf ~pos ~len =
+let handle_chunk w buf ~pos ~len =
   debug "handle_chunk %d %d" pos len ;
-  let open P2p in
   let cs = Cstruct.of_bigarray buf ~off:pos ~len in
-  consume_cs cs ;
+  consume_cs w cs ;
   return `Continue
 
-let buf = Cstruct.create 4096
-
 let main_loop port s r w =
-  let open P2p in
   info "Connected!" ;
   let cs = Message.to_cstruct ~network:!network
       buf (Version (Version.create ~recv_port:port ~trans_port:port ())) in
   write_cstruct w (Cstruct.sub buf 0 cs.off) ;
-  Reader.read_one_chunk_at_a_time r ~handle_chunk >>= function
+  Reader.read_one_chunk_at_a_time r ~handle_chunk:(handle_chunk w) >>= function
   | `Eof ->
     info "EOF" ;
     Deferred.unit
@@ -58,15 +73,15 @@ let set_loglevel = function
 
 let main testnet host port daemon datadir rundir logdir loglevel () =
   set_loglevel loglevel ;
-  if testnet then network := P2p.Network.Testnet ;
+  if testnet then network := Network.Testnet ;
   let host = match testnet, host with
     | _, Some host -> host
-    | true, None -> List.hd_exn P2p.Network.(seed Testnet)
-    | false, None -> List.hd_exn P2p.Network.(seed Mainnet) in
+    | true, None -> List.hd_exn Network.(seed Testnet)
+    | false, None -> List.hd_exn Network.(seed Mainnet) in
   let port = match testnet, port with
     | _, Some port -> port
-    | true, None -> P2p.Network.(port Testnet)
-    | false, None -> P2p.Network.(port Mainnet) in
+    | true, None -> Network.(port Testnet)
+    | false, None -> Network.(port Mainnet) in
   stage begin fun `Scheduler_started ->
     info "Connecting to %s:%d" host port ;
     Tcp.(with_connection (to_host_and_port host port) (main_loop port))

@@ -21,7 +21,9 @@ end
 
 module Service : sig
   type t =
-    | Node_network
+    | Network
+    | Getutxo
+    | Bloom
 end
 
 module Version : sig

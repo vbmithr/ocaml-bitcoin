@@ -7,6 +7,8 @@ val c_string_of_cstruct : Cstruct.t -> string
 val bytes_with_msg : len:int -> string -> Bytes.t
 
 module Timestamp : sig
+  val of_int64 : Int64.t -> Ptime.t
+  val to_int64 : Ptime.t -> Int64.t
   val of_int32 : Int32.t -> Ptime.t
   val to_int32 : Ptime.t -> Int32.t
 end
@@ -49,7 +51,15 @@ module CompactSize : sig
   val to_cstruct_int : Cstruct.t -> int -> Cstruct.t
 end
 
+module VarString : sig
+  val of_cstruct : Cstruct.t -> string * Cstruct.t
+  val to_cstruct : Cstruct.t -> string -> Cstruct.t
+end
+
 module ObjList : sig
   val of_cstruct :
-    f:(Cstruct.t -> 'a * Cstruct.t) -> Cstruct.t -> 'a list * Cstruct.t
+    Cstruct.t -> f:(Cstruct.t -> 'a * Cstruct.t) -> 'a list * Cstruct.t
+
+  val to_cstruct :
+    Cstruct.t -> 'a list -> f:(Cstruct.t -> 'a -> Cstruct.t) -> Cstruct.t
 end

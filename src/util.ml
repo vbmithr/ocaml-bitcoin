@@ -13,9 +13,16 @@ let bytes_with_msg ~len msg =
   buf
 
 module Timestamp = struct
+  let of_int64 i =
+    match Int64.to_float i |> Ptime.of_float_s with
+    | None -> invalid_arg "Timestamp.of_int64"
+    | Some ts -> ts
+
+  let to_int64 t = Int64.of_float (Ptime.to_float_s t)
+
   let of_int32 i =
     match Int32.to_float i |> Ptime.of_float_s with
-    | None -> invalid_arg "Timestamp.of_int32"
+    | None -> invalid_arg "Timestamp.of_int64"
     | Some ts -> ts
 
   let to_int32 t = Int32.of_float (Ptime.to_float_s t)
@@ -135,6 +142,18 @@ module CompactSize = struct
   let to_cstruct_int cs i = to_cstruct cs (Int i)
 end
 
+module VarString = struct
+  let of_cstruct cs =
+    let length, cs = CompactSize.of_cstruct_int cs in
+    Cstruct.(sub cs 0 length |> to_string, shift cs length)
+
+  let to_cstruct cs s =
+    let len = String.length s in
+    let cs = CompactSize.to_cstruct_int cs len in
+    Cstruct.blit_from_string s 0 cs 0 len ;
+    Cstruct.shift cs len
+end
+
 module ObjList = struct
   let rec inner obj_of_cstruct acc cs = function
     | 0 -> List.rev acc, cs
@@ -142,7 +161,14 @@ module ObjList = struct
       let obj, cs = obj_of_cstruct cs in
       inner obj_of_cstruct (obj :: acc) cs (pred n)
 
-  let of_cstruct ~f cs =
+  let of_cstruct cs ~f =
     let nb_addrs, cs = CompactSize.of_cstruct_int cs in
     inner f [] cs nb_addrs
+
+  let to_cstruct cs objs ~f =
+    let len = List.length objs in
+    let cs = CompactSize.to_cstruct_int cs len in
+    Base.List.fold_left objs ~init:cs ~f:begin fun cs o ->
+      f cs o
+    end
 end
