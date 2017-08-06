@@ -16,6 +16,7 @@ module Header : sig
   }
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
 end
 
 module Outpoint : sig
@@ -23,13 +24,6 @@ module Outpoint : sig
     hash : Hash.t ;
     i : int ;
   }
-end
-
-module Script : sig
-  type t
-
-  val of_cstruct :
-    Cstruct.t -> int -> t * Cstruct.t
 end
 
 module TxIn : sig

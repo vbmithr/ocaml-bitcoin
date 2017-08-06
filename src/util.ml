@@ -12,6 +12,17 @@ let bytes_with_msg ~len msg =
   String.(blit msg 0 buf 0 (min (length buf - 1) (length msg)));
   buf
 
+module Bool = struct
+  let of_int = function
+    | 1 -> true
+    | 0 -> false
+    | _ -> invalid_arg "Bool.of_int"
+
+  let to_int = function
+    | false -> 0
+    | true -> 1
+end
+
 module Timestamp = struct
   let of_int64 i =
     match Int64.to_float i |> Ptime.of_float_s with

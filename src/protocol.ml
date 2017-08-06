@@ -14,7 +14,6 @@ module Header = struct
         timestamp : uint32_t ;
         bits : uint32_t ;
         nonce : uint32_t ;
-        txn_count : uint8_t ;
       } [@@little_endian]]
   end
 
@@ -36,6 +35,16 @@ module Header = struct
     let bits = get_t_bits cs in
     let nonce = get_t_nonce cs in
     { version ; prev_block ; merkle_root ; timestamp ; bits ; nonce },
+    Cstruct.shift cs sizeof_t
+
+  let to_cstruct cs { version; prev_block; merkle_root; timestamp; bits; nonce } =
+    let open C in
+    set_t_version cs version ;
+    set_t_prev_block (Hash.to_string prev_block) 0 cs ;
+    set_t_merkle_root (Hash.to_string merkle_root) 0 cs ;
+    set_t_timestamp cs (Timestamp.to_int32 timestamp) ;
+    set_t_bits cs bits ;
+    set_t_nonce cs nonce ;
     Cstruct.shift cs sizeof_t
 end
 
@@ -59,13 +68,6 @@ module Outpoint = struct
     { hash ; i }, Cstruct.shift cs sizeof_t
 end
 
-module Script = struct
-  type t = ()
-
-  let of_cstruct cs size =
-    (), Cstruct.shift cs size
-end
-
 module TxIn = struct
   type t = {
     prev_out : Outpoint.t ;
@@ -75,8 +77,7 @@ module TxIn = struct
 
   let of_cstruct cs =
     let prev_out, cs = Outpoint.of_cstruct cs in
-    let script_len, cs = CompactSize.of_cstruct_int cs in
-    let script, cs = Script.of_cstruct cs script_len in
+    let script, cs = Script.of_cstruct cs in
     let seq = Cstruct.LE.get_uint32 cs 0 in
     { prev_out ; script ; seq }, Cstruct.shift cs 4
 end
@@ -89,8 +90,8 @@ module TxOut = struct
 
   let of_cstruct cs =
     let value = Cstruct.LE.get_uint64 cs 0 in
-    let script_len, cs = CompactSize.of_cstruct_int (Cstruct.shift cs 8) in
-    let script, cs = Script.of_cstruct cs script_len in
+    let cs = Cstruct.shift cs 8 in
+    let script, cs = Script.of_cstruct cs in
     { value ; script }, cs
 end
 

@@ -127,6 +127,7 @@ module MessageName : sig
     | SendHeaders
     | VerAck
     | Version
+    | SendCmpct
 
   val show : t -> string
 
@@ -163,6 +164,13 @@ module Reject : sig
   val of_cstruct : Cstruct.t -> t * Cstruct.t
 end
 
+module SendCmpct : sig
+  type t = {
+    compact : bool ;
+    version : int ;
+  }
+end
+
 module Message : sig
   type t =
     | Version of Version.t
@@ -195,6 +203,7 @@ module Message : sig
     | FilterLoad of FilterLoad.t
 
     | Reject of Reject.t
+    | SendCmpct of SendCmpct.t
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : network:Network.t -> Cstruct.t -> t -> Cstruct.t

@@ -42,7 +42,8 @@ module Network = struct
     | "\xf9\xbe\xb4\xd9" -> Mainnet
     | "\x0b\x11\x09\x07" -> Testnet
     | "\xfa\xbf\xb5\xda" -> Regtest
-    | _ -> invalid_arg "Version.of_start_string"
+    | s ->
+      invalid_arg ("Version.of_start_string: got " ^ (String.escaped s))
 
   let of_cstruct cs =
     of_start_string (Cstruct.to_string cs)
@@ -73,6 +74,7 @@ module MessageName = struct
     | SendHeaders
     | VerAck
     | Version
+    | SendCmpct
 
   let of_string = function
     | "block" -> Block
@@ -98,6 +100,7 @@ module MessageName = struct
     | "sendheaders" -> SendHeaders
     | "verack" -> VerAck
     | "version" -> Version
+    | "sendcmpct" -> SendCmpct
     | s -> invalid_arg ("MessageName.of_string: " ^ s)
 
   let to_string = function
@@ -124,6 +127,7 @@ module MessageName = struct
     | SendHeaders -> "sendheaders"
     | VerAck -> "verack"
     | Version -> "version"
+    | SendCmpct -> "sendcmpct"
 
   let of_cstruct cs =
     c_string_of_cstruct cs |> of_string
@@ -162,6 +166,11 @@ module MessageHeader = struct
   let verack ~network = {
     network ; msgname = VerAck ;
     size = 0 ; checksum = empty_checksum ;
+  }
+
+  let pong ~network = {
+    network ; msgname = Pong ;
+    size = 8 ; checksum = "" ;
   }
 
   let of_cstruct cs =
@@ -545,6 +554,26 @@ module Reject = struct
     { message ; code ; reason }, cs
 end
 
+module SendCmpct = struct
+  module C = struct
+    [%%cstruct type t = {
+        b : uint8_t ;
+        version : uint64_t ;
+      } [@@little_endian]]
+  end
+
+  type t = {
+    compact : bool ;
+    version : int ;
+  }
+
+  let of_cstruct cs =
+    let open C in
+    let compact = get_t_b cs |> Bool.of_int in
+    let version = get_t_version cs |> Int64.to_int in
+    { compact ; version }, Cstruct.shift cs sizeof_t
+end
+
 module Message = struct
   type t =
     | Version of Version.t
@@ -577,6 +606,7 @@ module Message = struct
     | FilterLoad of FilterLoad.t
 
     | Reject of Reject.t
+    | SendCmpct of SendCmpct.t
   [@@deriving sexp]
 
   let of_cstruct cs =
@@ -640,6 +670,9 @@ module Message = struct
     | Reject ->
       let reject, cs = Reject.of_cstruct payload in
       Reject reject, cs
+    | SendCmpct ->
+      let sendcmpct, cs = SendCmpct.of_cstruct payload in
+      SendCmpct sendcmpct, cs
     | _ -> failwith "Unsupported"
 
   let to_cstruct ~network cs = function
@@ -652,6 +685,14 @@ module Message = struct
       end_cs
     | VerAck ->
       MessageHeader.(to_cstruct cs (verack ~network))
+    | Pong i ->
+      let hdr = MessageHeader.pong ~network in
+      let payload_cs = Cstruct.shift cs MessageHeader.length in
+      Cstruct.LE.set_uint64 payload_cs 0 i ;
+      let end_cs = Cstruct.shift payload_cs 8 in
+      let size, checksum = Chksum.compute' payload_cs end_cs in
+      let _ = MessageHeader.to_cstruct cs { hdr with size ; checksum } in
+      end_cs
     | _ -> failwith "Unsupported"
 end
 

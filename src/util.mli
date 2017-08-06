@@ -6,6 +6,11 @@
 val c_string_of_cstruct : Cstruct.t -> string
 val bytes_with_msg : len:int -> string -> Bytes.t
 
+module Bool : sig
+  val of_int : int -> bool
+  val to_int : bool -> int
+end
+
 module Timestamp : sig
   val of_int64 : Int64.t -> Ptime.t
   val to_int64 : Ptime.t -> Int64.t

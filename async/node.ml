@@ -24,20 +24,63 @@ let process_msg w = function
                           relay } ->
     debug "Got Version %d (%s)" version user_agent ;
     let cs = Message.to_cstruct ~network:!network buf VerAck in
-    write_cstruct w (Cstruct.sub buf 0 cs.off) ;
+    write_cstruct2 w buf cs ;
     debug "Sent VerAck"
   | VerAck ->
     debug "Got VerAck!" ;
   | Reject rej ->
     error "%s" (Format.asprintf "%a" Reject.pp rej)
   | SendHeaders ->
-    let cs = CompactSize.to_cstruct_int buf (String.Table.length headers) in
+    debug "Got SendHeaders!" ;
+    let nb_headers = String.Table.length headers in
+    let cs = CompactSize.to_cstruct_int buf nb_headers in
     write_cstruct2 w buf cs ;
-    (* String.Table.iter headers ~f:begin fun h -> *)
-    (*   Header. *)
-    (* end *)
-  | _ ->
-    debug "Got Unsupported message!"
+    String.Table.iter headers ~f:begin fun h ->
+      let cs = Header.to_cstruct buf h in
+      write_cstruct2 w buf cs
+    end ;
+    debug "Sent %d headers" nb_headers
+  | SendCmpct _ ->
+    debug "Got SendCmpct!" ;
+  | GetAddr ->
+    debug "Got GetAddr!" ;
+  | Addr _ ->
+    debug "Got Addr!" ;
+  | Ping i ->
+    debug "Got Ping!" ;
+    let cs = Message.to_cstruct ~network:!network buf (Pong i) in
+    write_cstruct2 w buf cs ;
+    debug "Sent Pong" ;
+  | Pong i ->
+    debug "Got Pong!" ;
+  | GetBlocks _ ->
+    debug "Got GetBlocks!"
+  | GetData _ ->
+    debug "Got GetData!"
+  | GetHeaders _ ->
+    debug "Got GetHeaders!"
+  | Block _ ->
+    debug "Got Block!"
+  | MerkleBlock _ ->
+    debug "Got MerkleBlock!"
+  | Headers _ ->
+    debug "Got Headers!"
+  | Inv _ ->
+    debug "Got Inv!"
+  | NotFound _ ->
+    debug "Got NotFound!"
+  | MemPool ->
+    debug "Got MemPool!"
+  | Tx _ ->
+    debug "Got Tx!"
+  | FeeFilter _ ->
+    debug "Got FeeFilter!"
+  | FilterAdd _ ->
+    debug "Got FilterAdd!"
+  | FilterClear ->
+    debug "Got FilterClear!"
+  | FilterLoad _ ->
+    debug "Got FilterLoad!"
 
 let rec consume_cs w cs =
   let msg, cs = Message.of_cstruct cs in
