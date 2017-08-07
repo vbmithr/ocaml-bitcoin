@@ -3,4 +3,4 @@
   (public_name bitcoin)
   (preprocess (pps (ppx_cstruct)))
   (modules (util p2p protocol script))
-  (libraries (base ipaddr ptime ptime.clock.os cstruct digestif.c))))
+  (libraries (base stdint ipaddr ptime ptime.clock.os cstruct digestif.c))))

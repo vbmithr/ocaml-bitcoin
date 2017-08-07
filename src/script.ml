@@ -50,17 +50,32 @@ module Opcode = struct
     | Op_2over
     | Op_2rot
     | Op_2swap
+    | Op_cat
+    | Op_substr
+    | Op_left
+    | Op_right
     | Op_size
+    | Op_invert
+    | Op_and
+    | Op_or
+    | Op_xor
     | Op_equal
     | Op_equalverify
     | Op_1add
     | Op_1sub
+    | Op_2mul
+    | Op_2div
     | Op_negate
     | Op_abs
     | Op_not
     | Op_0notequal
     | Op_add
     | Op_sub
+    | Op_mul
+    | Op_div
+    | Op_mod
+    | Op_lshift
+    | Op_rshift
     | Op_booland
     | Op_boolor
     | Op_numequal
@@ -152,17 +167,32 @@ module Opcode = struct
     | Op_2over -> 112
     | Op_2rot -> 113
     | Op_2swap -> 114
+    | Op_cat -> 126
+    | Op_substr -> 127
+    | Op_left -> 128
+    | Op_right -> 129
     | Op_size -> 130
+    | Op_invert -> 131
+    | Op_and -> 132
+    | Op_or -> 133
+    | Op_xor -> 134
     | Op_equal -> 135
     | Op_equalverify -> 136
     | Op_1add -> 139
     | Op_1sub -> 140
+    | Op_2mul -> 141
+    | Op_2div -> 142
     | Op_negate -> 143
     | Op_abs -> 144
     | Op_not -> 145
     | Op_0notequal -> 146
     | Op_add -> 147
     | Op_sub -> 148
+    | Op_mul -> 149
+    | Op_div -> 150
+    | Op_mod -> 151
+    | Op_lshift -> 152
+    | Op_rshift -> 153
     | Op_booland -> 154
     | Op_boolor -> 155
     | Op_numequal -> 156
@@ -258,19 +288,34 @@ module Opcode = struct
     | 112 -> Op_2over
     | 113 -> Op_2rot
     | 114 -> Op_2swap
+    | 126 -> Op_cat
+    | 127 -> Op_substr
+    | 128 -> Op_left
+    | 129 -> Op_right
     | 130 -> Op_size
+    | 131 -> Op_invert
+    | 132 -> Op_and
+    | 133 -> Op_or
+    | 134 -> Op_xor
     | 135 -> Op_equal
     | 136 -> Op_equalverify
     | 137 -> Op_reserved1
     | 138 -> Op_reserved2
     | 139 -> Op_1add
     | 140 -> Op_1sub
+    | 141 -> Op_2mul
+    | 142 -> Op_2div
     | 143 -> Op_negate
     | 144 -> Op_abs
     | 145 -> Op_not
     | 146 -> Op_0notequal
     | 147 -> Op_add
     | 148 -> Op_sub
+    | 149 -> Op_mul
+    | 150 -> Op_div
+    | 151 -> Op_mod
+    | 152 -> Op_lshift
+    | 153 -> Op_rshift
     | 154 -> Op_booland
     | 155 -> Op_boolor
     | 156 -> Op_numequal
@@ -310,21 +355,35 @@ module Opcode = struct
 
   let of_cstruct cs =
     Cstruct.(get_uint8 cs 0 |> of_int, shift cs 1)
+
+  let to_cstruct cs opcode =
+    Cstruct.set_uint8 cs 0 (to_int opcode) ;
+    Cstruct.shift cs 1
 end
 
-type elt =
-  | O of Opcode.t
-  | D of string
+module Element = struct
+  type t =
+    | O of Opcode.t
+    | D of Cstruct.t
 
-type t = elt list
+  let to_cstruct cs = function
+    | O opcode ->
+      Opcode.to_cstruct cs opcode
+    | D buf ->
+      Cstruct.blit buf buf.off cs 0 buf.len ;
+      Cstruct.shift cs buf.len
+end
+
+type t = Element.t list
 
 let read_all cs =
+  let open Element in
   let rec inner acc data_len cs =
     if cs.Cstruct.len = 0 then List.rev acc
     else if cs.len = 0 && data_len <> 0 then invalid_arg "Script.read_all"
     else if data_len > 0 then
       inner
-        (D Cstruct.(sub cs 0 data_len |> to_string) :: acc)
+        (D (Cstruct.sub cs 0 data_len) :: acc)
         0
         (Cstruct.shift cs data_len)
     else
@@ -349,3 +408,135 @@ let of_cstruct cs =
   let len, cs = CompactSize.of_cstruct_int cs in
   read_all (Cstruct.sub cs 0 len),
   Cstruct.shift cs len
+
+let to_cstruct cs elts =
+  let open Element in
+  let len = Base.List.fold_left elts ~init:0 ~f:begin fun a -> function
+      | O _ -> Caml.succ a
+      | D cs -> a + cs.len
+    end in
+  let cs = CompactSize.to_cstruct_int cs len in
+  Base.List.fold_left elts ~init:cs ~f:begin fun cs elt ->
+    Element.to_cstruct cs elt
+  end
+
+module Run = struct
+  type stack_elt =
+    | Int of Int32.t
+    | Bytes of Cstruct.t
+
+  let is_zero = function
+    | Int 0l -> true
+    | Bytes cs when cs.len = 0 -> true
+    | Bytes cs when cs.len = 1 ->
+      Stdint.Int8.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
+    | Bytes cs when cs.len = 2 ->
+      Stdint.Int16.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
+    | Bytes cs when cs.len = 3 ->
+      Stdint.Int24.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
+    | Bytes cs when cs.len = 4 ->
+      Stdint.Int32.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
+    | Bytes cs when cs.len = 8 ->
+      Stdint.Int64.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
+    | _ -> false
+
+  let eval_exn code =
+    let rec drop stack altstack n current = function
+      | Element.O Op_if :: rest -> drop stack altstack n (succ current) rest
+      | O Op_notif :: rest -> drop stack altstack n (succ current) rest
+      | O Op_else :: rest when current > n -> drop stack altstack n current rest
+      | O Op_else :: rest when n = current -> eval_main n stack altstack rest
+      | O Op_endif :: rest when current > n -> drop stack altstack n (pred current) rest
+      | O Op_endif :: rest when current = n -> eval_main n stack altstack rest
+      | _ :: rest -> drop stack altstack n current rest
+      | [] -> invalid_arg "Run.eval: unfinished if sequence"
+    and eval_main iflevel stack altstack code =
+      match code, stack with
+      | Element.D buf :: rest, _ -> eval_main iflevel (Bytes buf :: stack) altstack rest
+      | O Op_zero :: _, _ -> invalid_arg "Run.eval: Op_zero"
+      | O (Op_data _) :: _, _ -> invalid_arg "Run.eval: Op_data"
+      | O Op_pushdata1 :: _, _ -> invalid_arg "Run.eval: Op_pushdata1"
+      | O Op_pushdata2 :: _, _ -> invalid_arg "Run.eval: Op_pushdata2"
+      | O Op_pushdata4 :: _, _ -> invalid_arg "Run.eval: Op_pushdata4"
+      | O Op_1negate :: rest, _ -> eval_main iflevel (Int (-1l) :: stack) altstack rest
+      | O Op_1 :: rest, _ -> eval_main iflevel (Int 1l :: stack) altstack rest
+      | O Op_2 :: rest, _ -> eval_main iflevel (Int 2l :: stack) altstack rest
+      | O Op_3 :: rest, _ -> eval_main iflevel (Int 3l :: stack) altstack rest
+      | O Op_4 :: rest, _ -> eval_main iflevel (Int 4l :: stack) altstack rest
+      | O Op_5 :: rest, _ -> eval_main iflevel (Int 5l :: stack) altstack rest
+      | O Op_6 :: rest, _ -> eval_main iflevel (Int 6l :: stack) altstack rest
+      | O Op_7 :: rest, _ -> eval_main iflevel (Int 7l :: stack) altstack rest
+      | O Op_8 :: rest, _ -> eval_main iflevel (Int 8l :: stack) altstack rest
+      | O Op_9 :: rest, _ -> eval_main iflevel (Int 9l :: stack) altstack rest
+      | O Op_10 :: rest, _ -> eval_main iflevel (Int 10l :: stack) altstack rest
+      | O Op_11 :: rest, _ -> eval_main iflevel (Int 11l :: stack) altstack rest
+      | O Op_12 :: rest, _ -> eval_main iflevel (Int 12l :: stack) altstack rest
+      | O Op_13 :: rest, _ -> eval_main iflevel (Int 13l :: stack) altstack rest
+      | O Op_14 :: rest, _ -> eval_main iflevel (Int 14l :: stack) altstack rest
+      | O Op_15 :: rest, _ -> eval_main iflevel (Int 15l :: stack) altstack rest
+      | O Op_16 :: rest, _ -> eval_main iflevel (Int 16l :: stack) altstack rest
+      | O Op_nop :: rest, _ -> eval_main iflevel stack altstack rest
+      | O Op_if :: rest, [] -> invalid_arg "Run.eval: if with empty stack"
+      | O Op_notif :: rest, [] -> invalid_arg "Run.eval: notif with empty stack"
+      | O Op_if :: rest, v :: _ ->
+        if is_zero v then
+          drop stack altstack (succ iflevel) (succ iflevel) rest
+        else
+          eval_main (succ iflevel) stack altstack rest
+      | O Op_notif :: rest, v :: _ ->
+        if is_zero v then
+          eval_main (succ iflevel) stack altstack rest
+        else
+          drop stack altstack (succ iflevel) (succ iflevel) rest
+      | O Op_else :: rest, _ ->
+        if iflevel = 0 then invalid_arg "Run.eval: unconsistent else"
+        else drop stack altstack iflevel iflevel rest
+      | O Op_endif :: rest, _ ->
+        let iflevel = pred iflevel in
+        if iflevel < 0 then invalid_arg "Run.eval: unconsistent endif"
+        else eval_main iflevel stack altstack rest
+      | O Op_verify :: rest, [] ->
+        invalid_arg "Run.eval: op_verify without a top stack element"
+      | O Op_verify :: rest, v :: _ -> not (is_zero v), stack, rest
+      | O Op_return :: rest, _ -> false, stack, rest
+      | O Op_toaltstack :: rest, [] ->
+        invalid_arg "Run.eval: op_toaltstack without a top stack element"
+      | O Op_toaltstack :: rest, v :: stack ->
+        eval_main iflevel stack (v :: altstack) rest
+      | O Op_fromaltstack :: rest, stack -> begin
+        match altstack with
+        | [] -> invalid_arg "Run.eval: op_fromaltstack without a top stack element"
+        | v :: altstack -> eval_main iflevel (v :: stack) altstack rest
+      end
+      | O Op_ifdup :: rest, [] ->
+        invalid_arg "Run.eval: op_ifdup without a top stack element"
+      | O Op_ifdup :: rest, v :: _ when is_zero v ->
+        eval_main iflevel stack altstack rest
+      | O Op_ifdup :: rest, v :: _ ->
+        eval_main iflevel (v :: stack) altstack rest
+      | O Op_depth :: rest, _ ->
+        eval_main iflevel (Int (List.length stack |> Int32.of_int) :: stack) altstack rest
+      | O Op_drop :: rest, [] ->
+        invalid_arg "Run.eval: op_drop without a top stack element"
+      | O Op_drop :: rest, v :: stack ->
+        eval_main iflevel stack altstack rest
+      | O Op_dup :: rest, [] ->
+        invalid_arg "Run.eval: op_dup without a top stack element"
+      | O Op_dup :: rest, v :: _ ->
+        eval_main iflevel (v :: stack) altstack rest
+      | O Op_nip :: rest, [] ->
+        invalid_arg "Run.eval: op_nip without a top stack element"
+      | O Op_nip :: rest, [v] ->
+        invalid_arg "Run.eval: op_nip without at least two elements"
+      | O Op_nip :: rest, x :: y :: stack ->
+        eval_main iflevel (x :: stack) altstack rest
+      | O Op_over :: rest, [] ->
+        invalid_arg "Run.eval: op_over without a top stack element"
+      | O Op_over :: rest, [v] ->
+        invalid_arg "Run.eval: op_over without at least two elements"
+      | O Op_over :: rest, _ :: x :: _ ->
+        eval_main iflevel (x :: stack) altstack rest
+      | _ -> invalid_arg "Run.eval: unsupported"
+    in
+    eval_main 0 [] [] code
+end

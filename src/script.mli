@@ -1,3 +1,5 @@
+open Base
+
 module Opcode : sig
   type t =
     | Op_zero
@@ -48,17 +50,32 @@ module Opcode : sig
     | Op_2over
     | Op_2rot
     | Op_2swap
+    | Op_cat
+    | Op_substr
+    | Op_left
+    | Op_right
     | Op_size
+    | Op_invert
+    | Op_and
+    | Op_or
+    | Op_xor
     | Op_equal
     | Op_equalverify
     | Op_1add
     | Op_1sub
+    | Op_2mul
+    | Op_2div
     | Op_negate
     | Op_abs
     | Op_not
     | Op_0notequal
     | Op_add
     | Op_sub
+    | Op_mul
+    | Op_div
+    | Op_mod
+    | Op_lshift
+    | Op_rshift
     | Op_booland
     | Op_boolor
     | Op_numequal
@@ -102,10 +119,21 @@ module Opcode : sig
     | Op_nop10
 end
 
-type elt =
-  | O of Opcode.t
-  | D of string
+module Element : sig
+  type t =
+    | O of Opcode.t
+    | D of Cstruct.t
+end
 
-type t = elt list
+type t = Element.t list
 
 val of_cstruct : Cstruct.t -> t * Cstruct.t
+val to_cstruct : Cstruct.t -> Element.t list -> Cstruct.t
+
+module Run : sig
+  type stack_elt =
+    | Int of Int32.t
+    | Bytes of Cstruct.t
+
+  val eval_exn : t -> bool * stack_elt list * t
+end
