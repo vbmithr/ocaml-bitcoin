@@ -422,68 +422,39 @@ let to_cstruct cs elts =
   end
 
 module Stack = struct
-  type t =
-    | Int of Int32.t
-    | Bytes of Cstruct.t
+  open Stdint
+  let to_int32 cs =
+    match cs.Cstruct.len with
+    | 0 -> 0l
+    | 1 -> Int8.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int32)
+    | 2 -> Int16.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int32)
+    | 3 -> Int24.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int32)
+    | 4 -> Int32.(of_bytes_little_endian (Cstruct.to_string cs) 0)
+    | _ -> invalid_arg "Stack.to_int32: input is longer than 4 bytes"
 
-  let compare x y =
-    match x, y with
-    | Int a, Int b -> Int32.compare a b
-    | Bytes a, Bytes b -> Cstruct.compare a b
-    | Int a, Bytes b ->
-      let cs = Cstruct.create 4 in
-      Cstruct.LE.set_uint32 cs 0 a ;
-      Cstruct.compare cs b
-    | Bytes a, Int b ->
-      let cs = Cstruct.create 4 in
-      Cstruct.LE.set_uint32 cs 0 b ;
-      Cstruct.compare a cs
+  let of_int32 i =
+    let buf = Bytes.create 4 in
+    match i with
+    | i when i >= -128l && i < 128l ->
+      Int8.(to_bytes_little_endian (of_int32 i) buf 0) ;
+      Cstruct.of_bytes (Bytes.sub buf 0 1)
+    | i when i >= -32768l && i < 32767l ->
+      Int16.(to_bytes_little_endian (of_int32 i) buf 0) ;
+      Cstruct.of_bytes (Bytes.sub buf 0 2)
+    | i when i >= 16777216l && i < 16777215l ->
+      Int24.(to_bytes_little_endian (of_int32 i) buf 0) ;
+      Cstruct.of_bytes (Bytes.sub buf 0 3)
+    | _ ->
+      Int32.(to_bytes_little_endian i buf 0) ;
+      Cstruct.of_bytes (Bytes.sub buf 0 4)
 
-  let equal x y =
-    compare x y = 0
-
-  let length = function
-    | Int _ -> 4
-    | Bytes cs -> Cstruct.len cs
-
-  let to_int = function
-    | Int i -> Int32.to_int i
-    | Bytes cs when cs.len = 1 ->
-      Stdint.Int8.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
-    | Bytes cs when cs.len = 2 ->
-      Stdint.Int16.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
-    | Bytes cs when cs.len = 3 ->
-      Stdint.Int24.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
-    | Bytes cs when cs.len = 4 ->
-      Stdint.Int32.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
-    | Bytes cs when cs.len = 5 ->
-      Stdint.Int40.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
-    | Bytes cs when cs.len = 6 ->
-      Stdint.Int48.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
-    | Bytes cs when cs.len = 7 ->
-      Stdint.Int56.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
-    | Bytes cs when cs.len = 8 ->
-      Stdint.Int64.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
-    | _ -> invalid_arg "Stack.to_int: unsupported"
-
-  let is_zero = function
-    | Int 0l -> true
-    | Bytes cs when cs.len = 0 -> true
-    | Bytes cs when cs.len = 1 ->
-      Stdint.Int8.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
-    | Bytes cs when cs.len = 2 ->
-      Stdint.Int16.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
-    | Bytes cs when cs.len = 3 ->
-      Stdint.Int24.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
-    | Bytes cs when cs.len = 4 ->
-      Stdint.Int32.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
-    | Bytes cs when cs.len = 8 ->
-      Stdint.Int64.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
-    | _ -> false
+    let to_bool cs = (to_int32 cs) <> 0l
+    let of_bool = function
+      | true -> of_int32 1l
+      | false -> Cstruct.create 0
 end
 
 module Run = struct
-  open Stack
   let eval_exn code =
     let rec drop stack altstack n current = function
       | Element.O Op_if :: rest -> drop stack altstack n (succ current) rest
@@ -496,42 +467,42 @@ module Run = struct
       | [] -> invalid_arg "Run.eval: unfinished if sequence"
     and eval_main iflevel stack altstack code =
       match code, stack with
-      | Element.D buf :: rest, _ -> eval_main iflevel (Bytes buf :: stack) altstack rest
+      | Element.D buf :: rest, _ -> eval_main iflevel (buf :: stack) altstack rest
       | O Op_zero :: _, _ -> invalid_arg "Run.eval: Op_zero"
       | O (Op_data _) :: _, _ -> invalid_arg "Run.eval: Op_data"
       | O Op_pushdata1 :: _, _ -> invalid_arg "Run.eval: Op_pushdata1"
       | O Op_pushdata2 :: _, _ -> invalid_arg "Run.eval: Op_pushdata2"
       | O Op_pushdata4 :: _, _ -> invalid_arg "Run.eval: Op_pushdata4"
-      | O Op_1negate :: rest, _ -> eval_main iflevel (Int (-1l) :: stack) altstack rest
-      | O Op_1 :: rest, _ -> eval_main iflevel (Int 1l :: stack) altstack rest
-      | O Op_2 :: rest, _ -> eval_main iflevel (Int 2l :: stack) altstack rest
-      | O Op_3 :: rest, _ -> eval_main iflevel (Int 3l :: stack) altstack rest
-      | O Op_4 :: rest, _ -> eval_main iflevel (Int 4l :: stack) altstack rest
-      | O Op_5 :: rest, _ -> eval_main iflevel (Int 5l :: stack) altstack rest
-      | O Op_6 :: rest, _ -> eval_main iflevel (Int 6l :: stack) altstack rest
-      | O Op_7 :: rest, _ -> eval_main iflevel (Int 7l :: stack) altstack rest
-      | O Op_8 :: rest, _ -> eval_main iflevel (Int 8l :: stack) altstack rest
-      | O Op_9 :: rest, _ -> eval_main iflevel (Int 9l :: stack) altstack rest
-      | O Op_10 :: rest, _ -> eval_main iflevel (Int 10l :: stack) altstack rest
-      | O Op_11 :: rest, _ -> eval_main iflevel (Int 11l :: stack) altstack rest
-      | O Op_12 :: rest, _ -> eval_main iflevel (Int 12l :: stack) altstack rest
-      | O Op_13 :: rest, _ -> eval_main iflevel (Int 13l :: stack) altstack rest
-      | O Op_14 :: rest, _ -> eval_main iflevel (Int 14l :: stack) altstack rest
-      | O Op_15 :: rest, _ -> eval_main iflevel (Int 15l :: stack) altstack rest
-      | O Op_16 :: rest, _ -> eval_main iflevel (Int 16l :: stack) altstack rest
+      | O Op_1negate :: rest, _ -> eval_main iflevel (Stack.of_int32 (-1l) :: stack) altstack rest
+      | O Op_1 :: rest, _ -> eval_main iflevel (Stack.of_int32 1l :: stack) altstack rest
+      | O Op_2 :: rest, _ -> eval_main iflevel (Stack.of_int32 2l :: stack) altstack rest
+      | O Op_3 :: rest, _ -> eval_main iflevel (Stack.of_int32 3l :: stack) altstack rest
+      | O Op_4 :: rest, _ -> eval_main iflevel (Stack.of_int32 4l :: stack) altstack rest
+      | O Op_5 :: rest, _ -> eval_main iflevel (Stack.of_int32 5l :: stack) altstack rest
+      | O Op_6 :: rest, _ -> eval_main iflevel (Stack.of_int32 6l :: stack) altstack rest
+      | O Op_7 :: rest, _ -> eval_main iflevel (Stack.of_int32 7l :: stack) altstack rest
+      | O Op_8 :: rest, _ -> eval_main iflevel (Stack.of_int32 8l :: stack) altstack rest
+      | O Op_9 :: rest, _ -> eval_main iflevel (Stack.of_int32 9l :: stack) altstack rest
+      | O Op_10 :: rest, _ -> eval_main iflevel (Stack.of_int32 10l :: stack) altstack rest
+      | O Op_11 :: rest, _ -> eval_main iflevel (Stack.of_int32 11l :: stack) altstack rest
+      | O Op_12 :: rest, _ -> eval_main iflevel (Stack.of_int32 12l :: stack) altstack rest
+      | O Op_13 :: rest, _ -> eval_main iflevel (Stack.of_int32 13l :: stack) altstack rest
+      | O Op_14 :: rest, _ -> eval_main iflevel (Stack.of_int32 14l :: stack) altstack rest
+      | O Op_15 :: rest, _ -> eval_main iflevel (Stack.of_int32 15l :: stack) altstack rest
+      | O Op_16 :: rest, _ -> eval_main iflevel (Stack.of_int32 16l :: stack) altstack rest
       | O Op_nop :: rest, _ -> eval_main iflevel stack altstack rest
       | O Op_if :: rest, [] -> invalid_arg "Run.eval: if with empty stack"
       | O Op_notif :: rest, [] -> invalid_arg "Run.eval: notif with empty stack"
       | O Op_if :: rest, v :: _ ->
-        if is_zero v then
-          drop stack altstack (succ iflevel) (succ iflevel) rest
-        else
+        if Stack.to_bool v then
           eval_main (succ iflevel) stack altstack rest
+        else
+          drop stack altstack (succ iflevel) (succ iflevel) rest
       | O Op_notif :: rest, v :: _ ->
-        if is_zero v then
-          eval_main (succ iflevel) stack altstack rest
-        else
+        if Stack.to_bool v then
           drop stack altstack (succ iflevel) (succ iflevel) rest
+        else
+          eval_main (succ iflevel) stack altstack rest
       | O Op_else :: rest, _ ->
         if iflevel = 0 then invalid_arg "Run.eval: unconsistent else"
         else drop stack altstack iflevel iflevel rest
@@ -541,25 +512,26 @@ module Run = struct
         else eval_main iflevel stack altstack rest
       | O Op_verify :: rest, [] ->
         invalid_arg "Run.eval: op_verify without a top stack element"
-      | O Op_verify :: rest, v :: _ -> not (is_zero v), stack, rest
+      | O Op_verify :: rest, v :: _ -> Stack.to_bool v, stack, rest
       | O Op_return :: rest, _ -> false, stack, rest
       | O Op_toaltstack :: rest, [] ->
         invalid_arg "Run.eval: op_toaltstack without a top stack element"
       | O Op_toaltstack :: rest, v :: stack ->
         eval_main iflevel stack (v :: altstack) rest
       | O Op_fromaltstack :: rest, stack -> begin
-        match altstack with
-        | [] -> invalid_arg "Run.eval: op_fromaltstack without a top stack element"
-        | v :: altstack -> eval_main iflevel (v :: stack) altstack rest
-      end
+          match altstack with
+          | [] -> invalid_arg "Run.eval: op_fromaltstack without a top stack element"
+          | v :: altstack -> eval_main iflevel (v :: stack) altstack rest
+        end
       | O Op_ifdup :: rest, [] ->
         invalid_arg "Run.eval: op_ifdup without a top stack element"
-      | O Op_ifdup :: rest, v :: _ when is_zero v ->
-        eval_main iflevel stack altstack rest
-      | O Op_ifdup :: rest, v :: _ ->
+      | O Op_ifdup :: rest, v :: _ when Stack.to_bool v ->
         eval_main iflevel (v :: stack) altstack rest
+      | O Op_ifdup :: rest, stack ->
+        eval_main iflevel stack altstack rest
       | O Op_depth :: rest, _ ->
-        eval_main iflevel (Int (List.length stack |> Int32.of_int) :: stack) altstack rest
+        let length = List.length stack |> Int32.of_int |> Stack.of_int32 in
+        eval_main iflevel (length :: stack) altstack rest
       | O Op_drop :: rest, [] ->
         invalid_arg "Run.eval: op_drop without a top stack element"
       | O Op_drop :: rest, v :: stack ->
@@ -579,23 +551,23 @@ module Run = struct
       | O Op_pick :: rest, [] ->
         invalid_arg "Run.eval: op_pick without a top stack element"
       | O Op_pick :: rest, v :: stack -> begin
-        let n = to_int v in
-        try
-          eval_main iflevel (List.nth stack n :: stack) altstack rest
-        with _ -> invalid_arg "Run.eval: op_pick with stack too shallow"
-      end
+          let n = Stack.to_int32 v |> Int32.to_int in
+          try
+            eval_main iflevel (List.nth stack n :: stack) altstack rest
+          with _ -> invalid_arg "Run.eval: op_pick with stack too shallow"
+        end
       | O Op_roll :: rest, [] ->
         invalid_arg "Run.eval: op_roll without a top stack element"
       | O Op_roll :: rest, v :: stack -> begin
-        let n = to_int v in
-        try
-          let nth_elt = List.nth stack n in
-          let stack = Base.List.filter_mapi stack ~f:begin fun i e ->
-              if i = n then None else Some e
-            end in
-          eval_main iflevel (nth_elt :: stack) altstack rest
-        with _ -> invalid_arg "Run.eval: op_roll with stack too shallow"
-      end
+          let n = Stack.to_int32 v |> Int32.to_int in
+          try
+            let nth_elt = List.nth stack n in
+            let stack = Base.List.filter_mapi stack ~f:begin fun i e ->
+                if i = n then None else Some e
+              end in
+            eval_main iflevel (nth_elt :: stack) altstack rest
+          with _ -> invalid_arg "Run.eval: op_roll with stack too shallow"
+        end
       | O Op_rot :: rest, x :: y :: z :: stack ->
         eval_main iflevel (y :: x :: y :: stack) altstack rest
       | O Op_rot :: rest, _ ->
@@ -635,22 +607,39 @@ module Run = struct
       | O Op_left :: _, _ -> invalid_arg "Run.eval: op_left is disabled"
       | O Op_right :: _, _ -> invalid_arg "Run.eval: op_right is disabled"
       | O Op_size :: rest, v :: stack ->
-        let stacklen = Int (Int32.of_int (length v)) in
+        let stacklen = Cstruct.len v |> Int32.of_int |> Stack.of_int32 in
         eval_main iflevel (stacklen :: stack) altstack rest
       | O Op_invert :: _, _ -> invalid_arg "Run.eval: op_invert is disabled"
       | O Op_and :: _, _ -> invalid_arg "Run.eval: op_and is disabled"
       | O Op_or :: _, _ -> invalid_arg "Run.eval: op_or is disabled"
       | O Op_xor :: _, _ -> invalid_arg "Run.eval: op_xor is disabled"
       | O Op_equal :: rest, x :: y :: stack ->
-        let ret = if equal x y then Int 1l else Int 0l in
+        let ret =  Cstruct.compare x y |> Int32.of_int |> Stack.of_int32 in
         eval_main iflevel (ret :: stack) altstack rest
       | O Op_equal :: _, _ ->
         invalid_arg "Run.eval: op_equal without at least 2 stack elements"
       | O Op_equalverify :: rest, x :: y :: stack ->
-        equal x y, stack, rest
+        Cstruct.compare x y = 0, stack, rest
       | O Op_equalverify :: _, _ ->
         invalid_arg "Run.eval: op_equalverify without at least 2 stack elements"
-      (* | O Op_1add :: rest, v :: stack -> *)
+      | O Op_1add :: rest, v :: stack -> begin
+          try
+            let v' = Stack.(to_int32 v |> Int32.succ |> of_int32) in
+            eval_main iflevel (v' :: stack) altstack rest
+          with _ ->
+            invalid_arg "Run.eval: op_1add is limited to 4 bytes max input"
+        end
+      | O Op_1add :: _, _ ->
+        invalid_arg "Run.eval: op_1add without a top stack element"
+      | O Op_1sub :: rest, v :: stack -> begin
+          try
+            let v' = Stack.(to_int32 v |> Int32.pred |> of_int32) in
+            eval_main iflevel (v' :: stack) altstack rest
+          with _ ->
+            invalid_arg "Run.eval: op_1sub is limited to 4 bytes max input"
+        end
+      | O Op_1sub :: _, _ ->
+        invalid_arg "Run.eval: op_1sub without a top stack element"
       | _ -> invalid_arg "Run.eval: unsupported"
     in
     eval_main 0 [] [] code
