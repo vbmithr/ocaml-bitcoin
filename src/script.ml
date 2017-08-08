@@ -380,7 +380,8 @@ let read_all cs =
   let open Element in
   let rec inner acc data_len cs =
     if cs.Cstruct.len = 0 then List.rev acc
-    else if cs.len = 0 && data_len <> 0 then invalid_arg "Script.read_all"
+    else if cs.len = 0 && data_len <> 0 then
+      invalid_arg "Script.read_all: cs too short"
     else if data_len > 0 then
       inner
         (D (Cstruct.sub cs 0 data_len) :: acc)
@@ -420,10 +421,50 @@ let to_cstruct cs elts =
     Element.to_cstruct cs elt
   end
 
-module Run = struct
-  type stack_elt =
+module Stack = struct
+  type t =
     | Int of Int32.t
     | Bytes of Cstruct.t
+
+  let compare x y =
+    match x, y with
+    | Int a, Int b -> Int32.compare a b
+    | Bytes a, Bytes b -> Cstruct.compare a b
+    | Int a, Bytes b ->
+      let cs = Cstruct.create 4 in
+      Cstruct.LE.set_uint32 cs 0 a ;
+      Cstruct.compare cs b
+    | Bytes a, Int b ->
+      let cs = Cstruct.create 4 in
+      Cstruct.LE.set_uint32 cs 0 b ;
+      Cstruct.compare a cs
+
+  let equal x y =
+    compare x y = 0
+
+  let length = function
+    | Int _ -> 4
+    | Bytes cs -> Cstruct.len cs
+
+  let to_int = function
+    | Int i -> Int32.to_int i
+    | Bytes cs when cs.len = 1 ->
+      Stdint.Int8.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
+    | Bytes cs when cs.len = 2 ->
+      Stdint.Int16.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
+    | Bytes cs when cs.len = 3 ->
+      Stdint.Int24.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
+    | Bytes cs when cs.len = 4 ->
+      Stdint.Int32.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
+    | Bytes cs when cs.len = 5 ->
+      Stdint.Int40.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
+    | Bytes cs when cs.len = 6 ->
+      Stdint.Int48.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
+    | Bytes cs when cs.len = 7 ->
+      Stdint.Int56.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
+    | Bytes cs when cs.len = 8 ->
+      Stdint.Int64.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int)
+    | _ -> invalid_arg "Stack.to_int: unsupported"
 
   let is_zero = function
     | Int 0l -> true
@@ -439,7 +480,10 @@ module Run = struct
     | Bytes cs when cs.len = 8 ->
       Stdint.Int64.(of_bytes_little_endian (Cstruct.to_string cs) 0 = zero)
     | _ -> false
+end
 
+module Run = struct
+  open Stack
   let eval_exn code =
     let rec drop stack altstack n current = function
       | Element.O Op_if :: rest -> drop stack altstack n (succ current) rest
@@ -524,18 +568,89 @@ module Run = struct
         invalid_arg "Run.eval: op_dup without a top stack element"
       | O Op_dup :: rest, v :: _ ->
         eval_main iflevel (v :: stack) altstack rest
-      | O Op_nip :: rest, [] ->
-        invalid_arg "Run.eval: op_nip without a top stack element"
-      | O Op_nip :: rest, [v] ->
-        invalid_arg "Run.eval: op_nip without at least two elements"
       | O Op_nip :: rest, x :: y :: stack ->
         eval_main iflevel (x :: stack) altstack rest
-      | O Op_over :: rest, [] ->
-        invalid_arg "Run.eval: op_over without a top stack element"
-      | O Op_over :: rest, [v] ->
-        invalid_arg "Run.eval: op_over without at least two elements"
+      | O Op_nip :: rest, _ ->
+        invalid_arg "Run.eval: op_nip without at least two stack elements"
       | O Op_over :: rest, _ :: x :: _ ->
         eval_main iflevel (x :: stack) altstack rest
+      | O Op_over :: rest, _ ->
+        invalid_arg "Run.eval: op_over without at least two stack element"
+      | O Op_pick :: rest, [] ->
+        invalid_arg "Run.eval: op_pick without a top stack element"
+      | O Op_pick :: rest, v :: stack -> begin
+        let n = to_int v in
+        try
+          eval_main iflevel (List.nth stack n :: stack) altstack rest
+        with _ -> invalid_arg "Run.eval: op_pick with stack too shallow"
+      end
+      | O Op_roll :: rest, [] ->
+        invalid_arg "Run.eval: op_roll without a top stack element"
+      | O Op_roll :: rest, v :: stack -> begin
+        let n = to_int v in
+        try
+          let nth_elt = List.nth stack n in
+          let stack = Base.List.filter_mapi stack ~f:begin fun i e ->
+              if i = n then None else Some e
+            end in
+          eval_main iflevel (nth_elt :: stack) altstack rest
+        with _ -> invalid_arg "Run.eval: op_roll with stack too shallow"
+      end
+      | O Op_rot :: rest, x :: y :: z :: stack ->
+        eval_main iflevel (y :: x :: y :: stack) altstack rest
+      | O Op_rot :: rest, _ ->
+        invalid_arg "Run.eval: op_rot without at least 3 stack elements"
+      | O Op_swap :: rest, x :: y :: stack ->
+        eval_main iflevel (y :: x :: stack) altstack rest
+      | O Op_swap :: rest, _ ->
+        invalid_arg "Run.eval: op_swap without at least 2 stack elements"
+      | O Op_tuck :: rest, x :: y :: stack ->
+        eval_main iflevel (x :: y :: y :: stack) altstack rest
+      | O Op_tuck :: rest, _ ->
+        invalid_arg "Run.eval: op_tuck without at least 2 stack elements"
+      | O Op_2drop :: rest, _ :: _ :: stack ->
+        eval_main iflevel stack altstack rest
+      | O Op_2drop :: rest, _ ->
+        invalid_arg "Run.eval: op_2drop without at least 2 stack elements"
+      | O Op_2dup :: rest, x :: y :: stack ->
+        eval_main iflevel (x :: y :: x :: y :: stack) altstack rest
+      | O Op_2dup :: rest, _ ->
+        invalid_arg "Run.eval: op_2dup without at least 2 stack elements"
+      | O Op_3dup :: rest, x :: y :: z :: stack ->
+        eval_main iflevel (x :: y :: z :: x :: y :: z :: stack) altstack rest
+      | O Op_3dup :: rest, _ ->
+        invalid_arg "Run.eval: op_3dup without at least 3 stack elements"
+      | O Op_2over :: rest, x :: y :: z :: t :: stack ->
+        eval_main iflevel (z :: t :: x :: y :: z :: t :: stack) altstack rest
+      | O Op_2over :: rest, _ ->
+        invalid_arg "Run.eval: op_2over without at least 4 stack elements"
+      | O Op_2rot :: rest, x :: y :: z :: t :: u :: v :: stack ->
+        eval_main iflevel (u :: v :: x :: y :: z :: t :: stack) altstack rest
+      | O Op_2rot :: rest, _ ->
+        invalid_arg "Run.eval: op_2rot without at least 6 stack elements"
+      | O Op_2swap :: rest, x :: y :: z :: t :: stack ->
+        eval_main iflevel (z :: t :: x :: y :: stack) altstack rest
+      | O Op_cat :: _, _ -> invalid_arg "Run.eval: op_cat is disabled"
+      | O Op_substr :: _, _ -> invalid_arg "Run.eval: op_substr is disabled"
+      | O Op_left :: _, _ -> invalid_arg "Run.eval: op_left is disabled"
+      | O Op_right :: _, _ -> invalid_arg "Run.eval: op_right is disabled"
+      | O Op_size :: rest, v :: stack ->
+        let stacklen = Int (Int32.of_int (length v)) in
+        eval_main iflevel (stacklen :: stack) altstack rest
+      | O Op_invert :: _, _ -> invalid_arg "Run.eval: op_invert is disabled"
+      | O Op_and :: _, _ -> invalid_arg "Run.eval: op_and is disabled"
+      | O Op_or :: _, _ -> invalid_arg "Run.eval: op_or is disabled"
+      | O Op_xor :: _, _ -> invalid_arg "Run.eval: op_xor is disabled"
+      | O Op_equal :: rest, x :: y :: stack ->
+        let ret = if equal x y then Int 1l else Int 0l in
+        eval_main iflevel (ret :: stack) altstack rest
+      | O Op_equal :: _, _ ->
+        invalid_arg "Run.eval: op_equal without at least 2 stack elements"
+      | O Op_equalverify :: rest, x :: y :: stack ->
+        equal x y, stack, rest
+      | O Op_equalverify :: _, _ ->
+        invalid_arg "Run.eval: op_equalverify without at least 2 stack elements"
+      (* | O Op_1add :: rest, v :: stack -> *)
       | _ -> invalid_arg "Run.eval: unsupported"
     in
     eval_main 0 [] [] code

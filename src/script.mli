@@ -130,10 +130,12 @@ type t = Element.t list
 val of_cstruct : Cstruct.t -> t * Cstruct.t
 val to_cstruct : Cstruct.t -> Element.t list -> Cstruct.t
 
-module Run : sig
-  type stack_elt =
+module Stack : sig
+  type t =
     | Int of Int32.t
     | Bytes of Cstruct.t
+end
 
-  val eval_exn : t -> bool * stack_elt list * t
+module Run : sig
+  val eval_exn : t -> bool * Stack.t list * t
 end
