@@ -63,11 +63,9 @@ module Hash = struct
 end
 
 module Chksum = struct
-  open Digestif.SHA256.Bigstring
-
   let compute cs =
     let data = Cstruct.to_bigarray cs in
-    Digestif.Bi.(sub (digest (digest data)) 0 4 |> to_string)
+    Digestif.(Bi.(sub SHA256.Bigstring.(digest (digest data)) 0 4 |> to_string))
 
   let compute' cs_start cs_end =
     let size = cs_end.Cstruct.off - cs_start.Cstruct.off in

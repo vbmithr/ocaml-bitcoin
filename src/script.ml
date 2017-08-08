@@ -540,7 +540,7 @@ module Run = struct
         invalid_arg "Run.eval: op_dup without a top stack element"
       | O Op_dup :: rest, v :: _ ->
         eval_main iflevel (v :: stack) altstack rest
-      | O Op_nip :: rest, x :: y :: stack ->
+      | O Op_nip :: rest, x :: _ :: stack ->
         eval_main iflevel (x :: stack) altstack rest
       | O Op_nip :: rest, _ ->
         invalid_arg "Run.eval: op_nip without at least two stack elements"
@@ -568,40 +568,40 @@ module Run = struct
             eval_main iflevel (nth_elt :: stack) altstack rest
           with _ -> invalid_arg "Run.eval: op_roll with stack too shallow"
         end
-      | O Op_rot :: rest, x :: y :: z :: stack ->
-        eval_main iflevel (y :: x :: y :: stack) altstack rest
+      | O Op_rot :: rest, z :: y :: x :: stack ->
+        eval_main iflevel (y :: z :: x :: stack) altstack rest
       | O Op_rot :: rest, _ ->
         invalid_arg "Run.eval: op_rot without at least 3 stack elements"
       | O Op_swap :: rest, x :: y :: stack ->
         eval_main iflevel (y :: x :: stack) altstack rest
       | O Op_swap :: rest, _ ->
         invalid_arg "Run.eval: op_swap without at least 2 stack elements"
-      | O Op_tuck :: rest, x :: y :: stack ->
-        eval_main iflevel (x :: y :: y :: stack) altstack rest
+      | O Op_tuck :: rest, y :: x :: stack ->
+        eval_main iflevel (y :: x :: y :: stack) altstack rest
       | O Op_tuck :: rest, _ ->
         invalid_arg "Run.eval: op_tuck without at least 2 stack elements"
       | O Op_2drop :: rest, _ :: _ :: stack ->
         eval_main iflevel stack altstack rest
       | O Op_2drop :: rest, _ ->
         invalid_arg "Run.eval: op_2drop without at least 2 stack elements"
-      | O Op_2dup :: rest, x :: y :: stack ->
-        eval_main iflevel (x :: y :: x :: y :: stack) altstack rest
+      | O Op_2dup :: rest, y :: x :: stack ->
+        eval_main iflevel (y :: x :: y :: x :: stack) altstack rest
       | O Op_2dup :: rest, _ ->
         invalid_arg "Run.eval: op_2dup without at least 2 stack elements"
-      | O Op_3dup :: rest, x :: y :: z :: stack ->
-        eval_main iflevel (x :: y :: z :: x :: y :: z :: stack) altstack rest
+      | O Op_3dup :: rest, z :: y :: x :: stack ->
+        eval_main iflevel (z :: y :: x :: z :: y :: x :: stack) altstack rest
       | O Op_3dup :: rest, _ ->
         invalid_arg "Run.eval: op_3dup without at least 3 stack elements"
-      | O Op_2over :: rest, x :: y :: z :: t :: stack ->
-        eval_main iflevel (z :: t :: x :: y :: z :: t :: stack) altstack rest
+      | O Op_2over :: rest, t :: z :: y :: x :: stack ->
+        eval_main iflevel (y :: x :: t :: z :: y :: x :: stack) altstack rest
       | O Op_2over :: rest, _ ->
         invalid_arg "Run.eval: op_2over without at least 4 stack elements"
-      | O Op_2rot :: rest, x :: y :: z :: t :: u :: v :: stack ->
-        eval_main iflevel (u :: v :: x :: y :: z :: t :: stack) altstack rest
+      | O Op_2rot :: rest, v :: u :: t :: z :: y :: x :: stack ->
+        eval_main iflevel (y :: x :: v :: u :: t :: z :: stack) altstack rest
       | O Op_2rot :: rest, _ ->
         invalid_arg "Run.eval: op_2rot without at least 6 stack elements"
-      | O Op_2swap :: rest, x :: y :: z :: t :: stack ->
-        eval_main iflevel (z :: t :: x :: y :: stack) altstack rest
+      | O Op_2swap :: rest, t :: z :: y :: x :: stack ->
+        eval_main iflevel (y :: x :: t :: z :: stack) altstack rest
       | O Op_cat :: _, _ -> invalid_arg "Run.eval: op_cat is disabled"
       | O Op_substr :: _, _ -> invalid_arg "Run.eval: op_substr is disabled"
       | O Op_left :: _, _ -> invalid_arg "Run.eval: op_left is disabled"
@@ -640,6 +640,120 @@ module Run = struct
         end
       | O Op_1sub :: _, _ ->
         invalid_arg "Run.eval: op_1sub without a top stack element"
+      | O Op_2mul :: _, _ -> invalid_arg "Run.eval: op_2mul is disabled"
+      | O Op_2div :: _, _ -> invalid_arg "Run.eval: op_2div is disabled"
+      | O Op_negate :: rest, v :: stack -> begin
+          try
+            let v' = Stack.(to_int32 v |> Int32.neg |> of_int32) in
+            eval_main iflevel (v' :: stack) altstack rest
+          with _ ->
+            invalid_arg "Run.eval: op_negate is limited to 4 bytes max input"
+        end
+      | O Op_negate :: rest, _ ->
+        invalid_arg "Run.eval: op_negate without a top stack element"
+      | O Op_abs :: rest, v :: stack -> begin
+          try
+            let v' = Stack.(to_int32 v |> Int32.abs |> of_int32) in
+            eval_main iflevel (v' :: stack) altstack rest
+          with _ ->
+            invalid_arg "Run.eval: op_abs is limited to 4 bytes max input"
+        end
+      | O Op_abs :: rest, _ ->
+        invalid_arg "Run.eval: op_abs without a top stack element"
+      | O Op_not :: rest, v :: stack -> begin
+          try
+            let v' = Stack.(of_bool (not (to_bool v))) in
+            eval_main iflevel (v' :: stack) altstack rest
+          with _ ->
+            invalid_arg "Run.eval: op_not is limited to 4 bytes max input"
+        end
+      | O Op_not :: rest, _ ->
+        invalid_arg "Run.eval: op_not without a top stack element"
+      | O Op_0notequal :: rest, v :: stack -> begin
+          try
+            let v' = Stack.(to_bool v |> of_bool) in
+            eval_main iflevel (v' :: stack) altstack rest
+          with _ ->
+            invalid_arg "Run.eval: op_0notequal is limited to 4 bytes max input"
+        end
+      | O Op_0notequal :: rest, _ ->
+        invalid_arg "Run.eval: op_0notequal without a top stack element"
+      | O Op_add :: rest, x :: y :: stack ->
+        let sum = Stack.(Int32.add (to_int32 x) (to_int32 y) |> of_int32) in
+        eval_main iflevel (sum :: stack) altstack rest
+      | O Op_add :: _, _ ->
+        invalid_arg "Run.eval: op_add without at least 2 stack elements"
+      | O Op_sub :: rest, x :: y :: stack ->
+        let diff = Stack.(Int32.sub (to_int32 x) (to_int32 y) |> of_int32) in
+        eval_main iflevel (diff :: stack) altstack rest
+      | O Op_sub :: _, _ ->
+        invalid_arg "Run.eval: op_sub without at least 2 stack elements"
+      | O Op_mul :: _, _ -> invalid_arg "Run.eval: op_mul is disabled"
+      | O Op_div :: _, _ -> invalid_arg "Run.eval: op_div is disabled"
+      | O Op_mod :: _, _ -> invalid_arg "Run.eval: op_mod is disabled"
+      | O Op_lshift :: _, _ -> invalid_arg "Run.eval: op_lshift is disabled"
+      | O Op_rshift :: _, _ -> invalid_arg "Run.eval: op_rshift is disabled"
+      | O Op_booland :: rest, x :: y :: stack ->
+        let conj = Stack.(((to_bool x) && (to_bool y)) |> of_bool) in
+        eval_main iflevel (conj :: stack) altstack rest
+      | O Op_booland :: _, _ ->
+        invalid_arg "Run.eval: op_booland without at least 2 stack elements"
+      | O Op_boolor :: rest, x :: y :: stack ->
+        let disj = Stack.(((to_bool x) || (to_bool y)) |> of_bool) in
+        eval_main iflevel (disj :: stack) altstack rest
+      | O Op_boolor :: _, _ ->
+        invalid_arg "Run.eval: op_boolor without at least 2 stack elements"
+      | O Op_numequal :: rest, x :: y :: stack ->
+        let res = Stack.(((to_int32 x) = (to_int32 y)) |> of_bool) in
+        eval_main iflevel (res :: stack) altstack rest
+      | O Op_numequal :: _, _ ->
+        invalid_arg "Run.eval: op_numequal without at least 2 stack elements"
+      | O Op_numequalverify :: rest, x :: y :: stack ->
+        Stack.((to_int32 x) = (to_int32 y)), stack, rest
+      | O Op_numequalverify :: _, _ ->
+        invalid_arg "Run.eval: op_numequalverify without at least 2 stack elements"
+      | O Op_numnotequal :: rest, x :: y :: stack ->
+        let res = Stack.(((to_int32 x) <> (to_int32 y)) |> of_bool) in
+        eval_main iflevel (res :: stack) altstack rest
+      | O Op_numnotequal :: _, _ ->
+        invalid_arg "Run.eval: op_numnotequal without at least 2 stack elements"
+      | O Op_lessthan :: rest, x :: y :: stack ->
+        let res = Stack.(((to_int32 x) < (to_int32 y)) |> of_bool) in
+        eval_main iflevel (res :: stack) altstack rest
+      | O Op_lessthan :: _, _ ->
+        invalid_arg "Run.eval: op_lessthan without at least 2 stack elements"
+      | O Op_greaterthan :: rest, x :: y :: stack ->
+        let res = Stack.(((to_int32 x) > (to_int32 y)) |> of_bool) in
+        eval_main iflevel (res :: stack) altstack rest
+      | O Op_greaterthan :: _, _ ->
+        invalid_arg "Run.eval: op_greaterthan without at least 2 stack elements"
+      | O Op_lessthanorequal :: rest, x :: y :: stack ->
+        let res = Stack.(((to_int32 x) <= (to_int32 y)) |> of_bool) in
+        eval_main iflevel (res :: stack) altstack rest
+      | O Op_lessthanorequal :: _, _ ->
+        invalid_arg "Run.eval: op_lessthanorequal without at least 2 stack elements"
+      | O Op_greaterthanorequal :: rest, x :: y :: stack ->
+        let res = Stack.(((to_int32 x) >= (to_int32 y)) |> of_bool) in
+        eval_main iflevel (res :: stack) altstack rest
+      | O Op_greaterthanorequal :: _, _ ->
+        invalid_arg "Run.eval: op_greaterthanorequal without at least 2 stack elements"
+      | O Op_min :: rest, x :: y :: stack ->
+        let res = Stack.((min (to_int32 x) (to_int32 y)) |> of_int32) in
+        eval_main iflevel (res :: stack) altstack rest
+      | O Op_min :: _, _ ->
+        invalid_arg "Run.eval: op_min without at least 2 stack elements"
+      | O Op_max :: rest, x :: y :: stack ->
+        let res = Stack.((max (to_int32 x) (to_int32 y)) |> of_int32) in
+        eval_main iflevel (res :: stack) altstack rest
+      | O Op_max :: _, _ ->
+        invalid_arg "Run.eval: op_max without at least 2 stack elements"
+      | O Op_within :: rest, ma :: mi :: v :: stack ->
+        let ma = Stack.to_int32 ma in
+        let mi = Stack.to_int32 mi in
+        let v = Stack.to_int32 v in
+        eval_main iflevel (Stack.of_bool (v >= mi && v < ma) :: stack) altstack rest
+      | O Op_within :: _, _ ->
+        invalid_arg "Run.eval: op_within without at least 3 stack elements"
       | _ -> invalid_arg "Run.eval: unsupported"
     in
     eval_main 0 [] [] code
