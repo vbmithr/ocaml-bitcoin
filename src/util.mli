@@ -3,8 +3,11 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
+open Base
+module Format = Caml.Format
+
 val c_string_of_cstruct : Cstruct.t -> string
-val bytes_with_msg : len:int -> string -> Bytes.t
+val bytes_with_msg : len:int -> string -> String.t
 
 module Bool : sig
   val of_int : int -> bool
@@ -12,14 +15,24 @@ module Bool : sig
 end
 
 module Timestamp : sig
-  val of_int64 : Int64.t -> Ptime.t
-  val to_int64 : Ptime.t -> Int64.t
-  val of_int32 : Int32.t -> Ptime.t
-  val to_int32 : Ptime.t -> Int32.t
+  include module type of Ptime
+
+  val t_of_sexp : Sexplib.Sexp.t -> t
+  val sexp_of_t : t -> Sexplib.Sexp.t
+
+  val of_int64 : Int64.t -> t
+  val to_int64 : t -> Int64.t
+  val of_int32 : Int32.t -> t
+  val to_int32 : t -> Int32.t
+
+  val now : unit -> t
 end
 
 module Hash : sig
-  type t = private Hash of string
+  type t = private Hash of string [@@deriving sexp]
+  type comparator_witness
+
+  val comparator : (t, comparator_witness) Comparator.t
 
   val pp : Format.formatter -> t -> unit
   val show : t -> string
@@ -29,8 +42,8 @@ module Hash : sig
 
   val to_string : t -> string
 
-  module Set : Set.S with type elt = t
-  module Map : Map.S with type key = t
+  type set = (t, comparator_witness) Set.t [@@deriving sexp]
+  type 'a map = (t, 'a, comparator_witness) Map.t
 end
 
 module Chksum : sig

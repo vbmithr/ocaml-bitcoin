@@ -1,3 +1,4 @@
+open Sexplib.Std
 open Util
 
 module Opcode = struct
@@ -117,6 +118,7 @@ module Opcode = struct
     | Op_nop8
     | Op_nop9
     | Op_nop10
+  [@@deriving sexp]
 
   let to_int = function
     | Op_zero -> 0
@@ -365,6 +367,7 @@ module Element = struct
   type t =
     | O of Opcode.t
     | D of Cstruct.t
+  [@@deriving sexp]
 
   let to_cstruct cs = function
     | O opcode ->
@@ -374,7 +377,7 @@ module Element = struct
       Cstruct.shift cs buf.len
 end
 
-type t = Element.t list
+type t = Element.t list [@@deriving sexp]
 
 let read_all cs =
   let open Element in

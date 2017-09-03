@@ -10,10 +10,10 @@ module Header : sig
     version : Int32.t ;
     prev_block : Hash.t ;
     merkle_root : Hash.t ;
-    timestamp : Ptime.t ;
+    timestamp : Timestamp.t ;
     bits : Int32.t ;
     nonce : Int32.t ;
-  }
+  } [@@deriving sexp]
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
@@ -44,7 +44,7 @@ end
 module Transaction : sig
   module LockTime : sig
     type t =
-      | Timestamp of Ptime.t
+      | Timestamp of Timestamp.t
       | Block of int
   end
 
@@ -53,7 +53,7 @@ module Transaction : sig
     tx_in : TxIn.t list ;
     tx_out : TxOut.t list ;
     lock_time : LockTime.t ;
-  }
+  } [@@deriving sexp]
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
 end
@@ -62,7 +62,7 @@ module Block : sig
   type t = {
     header : Header.t ;
     txns : Transaction.t list ;
-  }
+  } [@@deriving sexp]
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
 end

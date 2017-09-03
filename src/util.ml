@@ -3,13 +3,16 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
+open Base
+module Format = Caml.Format
+
 let c_string_of_cstruct cs =
   let str = Cstruct.to_string cs in
-  String.(sub str 0 (index str '\x00'))
+  String.(sub str 0 (index_exn str '\x00'))
 
 let bytes_with_msg ~len msg =
-  let buf = Bytes.make len '\x00' in
-  String.(blit msg 0 buf 0 (min (length buf - 1) (length msg)));
+  let buf = String.make len '\x00' in
+  String.(blit msg 0 buf 0 (Int.min (length buf - 1) (length msg)));
   buf
 
 module Bool = struct
@@ -24,6 +27,19 @@ module Bool = struct
 end
 
 module Timestamp = struct
+  include Ptime
+
+  let t_of_sexp sexp =
+    let open Sexplib.Std in
+    let sexp_str = string_of_sexp sexp in
+    match of_rfc3339 sexp_str with
+    | Ok (t, _, _) -> t
+    | _ -> invalid_arg "Timestamp.t_of_sexp"
+
+  let sexp_of_t t =
+    let open Sexplib.Std in
+    sexp_of_string (to_rfc3339 t)
+
   let of_int64 i =
     match Int64.to_float i |> Ptime.of_float_s with
     | None -> invalid_arg "Timestamp.of_int64"
@@ -37,13 +53,17 @@ module Timestamp = struct
     | Some ts -> ts
 
   let to_int32 t = Int32.of_float (Ptime.to_float_s t)
+
+  include Ptime_clock
 end
 
 module Hash = struct
   module T = struct
-    type t = Hash of string
+    type t = Hash of string [@@deriving sexp]
 
     let compare (Hash a) (Hash b) = String.compare a b
+
+    include (val Comparator.make ~compare ~sexp_of_t)
 
     let of_string s =
       if String.length s <> 32 then invalid_arg "Hash.of_string" else Hash s
@@ -58,8 +78,13 @@ module Hash = struct
       Cstruct.shift cs 32
   end
   include T
-  module Set = Set.Make(T)
-  module Map = Map.Make(T)
+  module HashSet = Set.M(T)
+  module HashMap = Map.M(T)
+
+  type set = HashSet.t
+  let set_of_sexp sexp = Set.m__t_of_sexp (module T) sexp
+  let sexp_of_set set = Set.sexp_of_m__t (module T) set
+  type 'a map = 'a HashMap.t
 end
 
 module Chksum = struct
@@ -72,12 +97,12 @@ module Chksum = struct
     size, compute (Cstruct.sub cs_start 0 size)
 
   let verify ~expected data =
-    expected = compute data
+    String.equal expected (compute data)
 
   exception Invalid_checksum
 
   let verify_exn ~expected data =
-    if expected <> compute data then raise Invalid_checksum
+    if not (String.equal expected (compute data)) then raise Invalid_checksum
 end
 
 module CompactSize = struct
@@ -103,7 +128,7 @@ module CompactSize = struct
       set_int16 buf (pos+1) n
     | Int n ->
       set_int8 buf pos 0xFE ;
-      set_int32 buf (pos+1) (Int32.of_int n)
+      set_int32 buf (pos+1) (Int32.of_int_exn n)
     | Int32 n ->
       set_int8 buf pos 0xFE ;
       set_int32 buf (pos+1) n
@@ -122,8 +147,8 @@ module CompactSize = struct
   let of_cstruct_int cs =
     match of_cstruct cs with
     | Int i, cs -> i, cs
-    | Int32 i, cs -> Int32.to_int i, cs
-    | Int64 i, cs -> Int64.to_int i, cs
+    | Int32 i, cs -> Int32.to_int_exn i, cs
+    | Int64 i, cs -> Int64.to_int_exn i, cs
 
   let to_cstruct cs t =
     let open Cstruct in
@@ -137,7 +162,7 @@ module CompactSize = struct
       shift cs 3
     | Int n ->
       set_uint8 cs 0 0xFE ;
-      LE.set_uint32 cs 1 (Int32.of_int n) ;
+      LE.set_uint32 cs 1 (Int32.of_int_exn n) ;
       shift cs 5
     | Int32 n ->
       set_uint8 cs 0 0xFE ;
@@ -168,7 +193,7 @@ module ObjList = struct
     | 0 -> List.rev acc, cs
     | n ->
       let obj, cs = obj_of_cstruct cs in
-      inner obj_of_cstruct (obj :: acc) cs (pred n)
+      inner obj_of_cstruct (obj :: acc) cs (Caml.pred n)
 
   let of_cstruct cs ~f =
     let nb_addrs, cs = CompactSize.of_cstruct_int cs in

@@ -3,6 +3,8 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
+open Base
+module Format = Caml.Format
 open Util
 open Protocol
 
@@ -11,6 +13,9 @@ module Network : sig
     | Mainnet
     | Testnet
     | Regtest
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 
   val port : t -> int
   val seed : t -> string list
@@ -30,7 +35,7 @@ module Version : sig
   type t = {
     version : int ;
     services : Service.t list ;
-    timestamp : Ptime.t ;
+    timestamp : Timestamp.t ;
     recv_services : Service.t list ;
     recv_ipaddr : Ipaddr.V6.t ;
     recv_port : int ;
@@ -44,7 +49,7 @@ module Version : sig
   }
 
   val create :
-    ?version:int -> ?services:Service.t list -> ?timestamp:Ptime.t ->
+    ?version:int -> ?services:Service.t list -> ?timestamp:Timestamp.t ->
     ?recv_services:Service.t list -> ?recv_ipaddr:Ipaddr.V6.t -> recv_port:int ->
     ?trans_services:Service.t list -> ?trans_ipaddr:Ipaddr.V6.t -> trans_port:int ->
     ?nonce:Int64.t -> ?user_agent:string -> ?start_height:int -> ?relay:bool -> unit -> t
@@ -52,7 +57,7 @@ end
 
 module Address : sig
   type t = {
-    timestamp : Ptime.t ;
+    timestamp : Timestamp.t ;
     services : Service.t list ;
     ipaddr : Ipaddr.V6.t ;
     port : int ;
@@ -62,7 +67,7 @@ end
 module GetHashes : sig
   type t = {
     version : int ;
-    hashes : Hash.Set.t ;
+    hashes : (Hash.t, Hash.comparator_witness) Set.t ;
     stop_hash : Hash.t ;
   }
 end
@@ -83,7 +88,7 @@ module MerkleBlock : sig
   type t = {
     header : Header.t ;
     txn_count : int ;
-    hashes : Hash.Set.t ;
+    hashes : Hash.set ;
     flags : string ;
   }
 end

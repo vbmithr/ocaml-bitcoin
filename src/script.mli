@@ -125,7 +125,7 @@ module Element : sig
     | D of Cstruct.t
 end
 
-type t = Element.t list
+type t = Element.t list [@@deriving sexp]
 
 val of_cstruct : Cstruct.t -> t * Cstruct.t
 val to_cstruct : Cstruct.t -> Element.t list -> Cstruct.t
