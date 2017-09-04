@@ -99,10 +99,12 @@ module Chksum = struct
   let verify ~expected data =
     String.equal expected (compute data)
 
-  exception Invalid_checksum
+  exception Invalid_checksum of string * string
 
   let verify_exn ~expected data =
-    if not (String.equal expected (compute data)) then raise Invalid_checksum
+    let computed = compute data in
+    if not (String.equal expected computed) then
+      raise (Invalid_checksum (expected, computed))
 end
 
 module CompactSize = struct

@@ -81,7 +81,7 @@ module Inv : sig
   type t = {
     id : id ;
     hash : Hash.t ;
-  }
+  } [@@deriving sexp]
 end
 
 module MerkleBlock : sig
@@ -141,6 +141,18 @@ module MessageName : sig
   val to_string : t -> string
 end
 
+module MessageHeader : sig
+  type t = {
+    network : Network.t ;
+    msgname : MessageName.t ;
+    size : int ;
+    checksum : string ;
+  } [@@deriving sexp]
+
+  val size : int
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
+end
+
 module Reject : sig
   module Code : sig
     type t =
@@ -173,7 +185,7 @@ module SendCmpct : sig
   type t = {
     compact : bool ;
     version : int ;
-  }
+  } [@@deriving sexp]
 end
 
 module Message : sig
@@ -209,7 +221,14 @@ module Message : sig
 
     | Reject of Reject.t
     | SendCmpct of SendCmpct.t
+  [@@deriving sexp]
 
-  val of_cstruct : Cstruct.t -> t * Cstruct.t
+  type error =
+    | Invalid_checksum of MessageHeader.t
+
+  val of_cstruct :
+    Cstruct.t ->
+    (MessageHeader.t * t, error) Result.t * Cstruct.t
+
   val to_cstruct : network:Network.t -> Cstruct.t -> t -> Cstruct.t
 end

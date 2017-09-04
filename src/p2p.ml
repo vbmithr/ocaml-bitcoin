@@ -17,6 +17,7 @@ module Network = struct
     | Mainnet
     | Testnet
     | Regtest
+  [@@deriving sexp]
 
   let pp ppf = function
     | Mainnet -> Format.pp_print_string ppf "Mainnet"
@@ -57,7 +58,7 @@ module Network = struct
     | "\x0b\x11\x09\x07" -> Testnet
     | "\xfa\xbf\xb5\xda" -> Regtest
     | s ->
-      invalid_arg ("Version.of_start_string: got " ^ (String.escaped s))
+      invalid_arg ("Network.of_start_string: got " ^ (String.escaped s))
 
   let of_cstruct cs =
     of_start_string (Cstruct.to_string cs)
@@ -159,9 +160,9 @@ module MessageHeader = struct
     msgname : MessageName.t ;
     size : int ;
     checksum : string ;
-  }
+  } [@@deriving sexp]
 
-  let length = CS.MessageHeader.sizeof_t
+  let size = CS.MessageHeader.sizeof_t
   let empty_checksum = "\x5d\xf6\xe0\xe2"
 
   let version ~network = {
@@ -582,76 +583,85 @@ module Message = struct
     | SendCmpct of SendCmpct.t
   [@@deriving sexp]
 
+  type error =
+    | Invalid_checksum of MessageHeader.t
+
   let of_cstruct cs =
     let h, cs = MessageHeader.of_cstruct cs in
     let payload = Cstruct.sub cs 0 h.size in
-    Chksum.verify_exn ~expected:h.checksum payload ;
-    match h.msgname with
-    | Version ->
-      let version, cs = Version.of_cstruct payload in
-      Version version, cs
-    | VerAck -> VerAck, cs
-    | GetAddr -> GetAddr, cs
-    | Addr ->
-      let addrs, cs = ObjList.of_cstruct ~f:Address.of_cstruct payload in
-      Addr addrs, cs
-    | Ping ->
-      let nonce, cs = PingPong.of_cstruct payload in
-      Ping nonce, cs
-    | Pong ->
-      let nonce, cs = PingPong.of_cstruct payload in
-      Pong nonce, cs
-    | GetBlocks ->
-      let objs, cs = GetHashes.of_cstruct payload in
-      GetBlocks objs, cs
-    | GetData ->
-      let objs, cs = GetHashes.of_cstruct payload in
-      GetData objs, cs
-    | GetHeaders ->
-      let objs, cs = GetHashes.of_cstruct payload in
-      GetHeaders objs, cs
-    | Block ->
-      let block, cs = Block.of_cstruct payload in
-      Block block, cs
-    | MerkleBlock ->
-      let mblock, cs = MerkleBlock.of_cstruct payload in
-      MerkleBlock mblock, cs
-    | Headers ->
-      let hdrs, cs = ObjList.of_cstruct ~f:Header.of_cstruct payload in
-      Headers hdrs, cs
-    | Inv ->
-      let invs, cs = ObjList.of_cstruct ~f:Inv.of_cstruct payload in
-      Inv invs, cs
-    | NotFound ->
-      let invs, cs = ObjList.of_cstruct ~f:Inv.of_cstruct payload in
-      NotFound invs, cs
-    | MemPool -> MemPool, cs
-    | SendHeaders -> SendHeaders, cs
-    | Tx ->
-      let tx, cs = Transaction.of_cstruct payload in
-      Tx tx, cs
-    | FeeFilter ->
-      let fee, cs = FeeFilter.of_cstruct payload in
-      FeeFilter fee, cs
-    | FilterAdd ->
-      let filter, cs = FilterAdd.of_cstruct payload in
-      FilterAdd filter, cs
-    | FilterClear -> FilterClear, cs
-    | FilterLoad ->
-      let filter, cs = FilterLoad.of_cstruct payload in
-      FilterLoad filter, cs
-    | Reject ->
-      let reject, cs = Reject.of_cstruct payload in
-      Reject reject, cs
-    | SendCmpct ->
-      let sendcmpct, cs = SendCmpct.of_cstruct payload in
-      SendCmpct sendcmpct, cs
-    | _ -> failwith "Unsupported"
+    match Chksum.verify ~expected:h.checksum payload with
+    | false ->
+      Error (Invalid_checksum h), cs
+    | true ->
+      let msg, cs =
+        match h.msgname with
+        | Version ->
+          let version, cs = Version.of_cstruct payload in
+          Version version, cs
+        | VerAck -> VerAck, cs
+        | GetAddr -> GetAddr, cs
+        | Addr ->
+          let addrs, cs = ObjList.of_cstruct ~f:Address.of_cstruct payload in
+          Addr addrs, cs
+        | Ping ->
+          let nonce, cs = PingPong.of_cstruct payload in
+          Ping nonce, cs
+        | Pong ->
+          let nonce, cs = PingPong.of_cstruct payload in
+          Pong nonce, cs
+        | GetBlocks ->
+          let objs, cs = GetHashes.of_cstruct payload in
+          GetBlocks objs, cs
+        | GetData ->
+          let objs, cs = GetHashes.of_cstruct payload in
+          GetData objs, cs
+        | GetHeaders ->
+          let objs, cs = GetHashes.of_cstruct payload in
+          GetHeaders objs, cs
+        | Block ->
+          let block, cs = Block.of_cstruct payload in
+          Block block, cs
+        | MerkleBlock ->
+          let mblock, cs = MerkleBlock.of_cstruct payload in
+          MerkleBlock mblock, cs
+        | Headers ->
+          let hdrs, cs = ObjList.of_cstruct ~f:Header.of_cstruct payload in
+          Headers hdrs, cs
+        | Inv ->
+          let invs, cs = ObjList.of_cstruct ~f:Inv.of_cstruct payload in
+          Inv invs, cs
+        | NotFound ->
+          let invs, cs = ObjList.of_cstruct ~f:Inv.of_cstruct payload in
+          NotFound invs, cs
+        | MemPool -> MemPool, cs
+        | SendHeaders -> SendHeaders, cs
+        | Tx ->
+          let tx, cs = Transaction.of_cstruct payload in
+          Tx tx, cs
+        | FeeFilter ->
+          let fee, cs = FeeFilter.of_cstruct payload in
+          FeeFilter fee, cs
+        | FilterAdd ->
+          let filter, cs = FilterAdd.of_cstruct payload in
+          FilterAdd filter, cs
+        | FilterClear -> FilterClear, cs
+        | FilterLoad ->
+          let filter, cs = FilterLoad.of_cstruct payload in
+          FilterLoad filter, cs
+        | Reject ->
+          let reject, cs = Reject.of_cstruct payload in
+          Reject reject, cs
+        | SendCmpct ->
+          let sendcmpct, cs = SendCmpct.of_cstruct payload in
+          SendCmpct sendcmpct, cs
+        | _ -> failwith "Unsupported"
+      in
+      Ok (h, msg), cs
 
   let to_cstruct ~network cs = function
     | Version ver ->
       let hdr = MessageHeader.version ~network in
-      let payload_cs = Cstruct.shift cs MessageHeader.length in
+      let payload_cs = Cstruct.shift cs MessageHeader.size in
       let end_cs = Version.to_cstruct payload_cs ver in
       let size, checksum = Chksum.compute' payload_cs end_cs in
       let _ = MessageHeader.to_cstruct cs { hdr with size ; checksum } in
@@ -660,7 +670,7 @@ module Message = struct
       MessageHeader.(to_cstruct cs (verack ~network))
     | Pong i ->
       let hdr = MessageHeader.pong ~network in
-      let payload_cs = Cstruct.shift cs MessageHeader.length in
+      let payload_cs = Cstruct.shift cs MessageHeader.size in
       Cstruct.LE.set_uint64 payload_cs 0 i ;
       let end_cs = Cstruct.shift payload_cs 8 in
       let size, checksum = Chksum.compute' payload_cs end_cs in
@@ -668,4 +678,3 @@ module Message = struct
       end_cs
     | _ -> failwith "Unsupported"
 end
-

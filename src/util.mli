@@ -51,7 +51,7 @@ module Chksum : sig
   val compute' : Cstruct.t -> Cstruct.t -> int * string
   val verify : expected:string -> Cstruct.t -> bool
 
-  exception Invalid_checksum
+  exception Invalid_checksum of string * string
 
   val verify_exn : expected:string -> Cstruct.t -> unit
     (** @raises Invalid_checksum on error. *)

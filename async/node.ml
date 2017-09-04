@@ -18,11 +18,16 @@ let write_cstruct2 w cs cs2 =
   let len = cs2.Cstruct.off - cs.Cstruct.off in
   Writer.write_bigstring w cs.buffer ~pos:cs.off ~len
 
-let process_msg w = function
+let process_error w header =
+  sexp ~level:`Error (MessageHeader.sexp_of_t header)
+
+let process_msg w header msg =
+  sexp ~level:`Debug (MessageHeader.sexp_of_t header) ;
+  sexp ~level:`Debug (Message.sexp_of_t msg) ;
+  match msg with
   | Message.Version { version; services; timestamp; recv_services; recv_ipaddr; recv_port;
-                          trans_services; trans_ipaddr; trans_port; nonce; user_agent; start_height;
-                          relay } ->
-    debug "Got Version %d (%s)" version user_agent ;
+                      trans_services; trans_ipaddr; trans_port; nonce; user_agent; start_height;
+                      relay } ->
     let cs = Message.to_cstruct ~network:!network buf VerAck in
     write_cstruct2 w buf cs ;
     debug "Sent VerAck"
@@ -40,8 +45,8 @@ let process_msg w = function
       write_cstruct2 w buf cs
     end ;
     debug "Sent %d headers" nb_headers
-  | SendCmpct _ ->
-    debug "Got SendCmpct!" ;
+  | SendCmpct t ->
+    sexp ~level:`Debug (SendCmpct.sexp_of_t t) ;
   | GetAddr ->
     debug "Got GetAddr!" ;
   | Addr _ ->
@@ -65,16 +70,18 @@ let process_msg w = function
     debug "Got MerkleBlock!"
   | Headers _ ->
     debug "Got Headers!"
-  | Inv _ ->
-    debug "Got Inv!"
+  | Inv invs ->
+    List.iter invs ~f:begin fun inv ->
+      sexp ~level:`Debug (Inv.sexp_of_t inv)
+    end
   | NotFound _ ->
     debug "Got NotFound!"
   | MemPool ->
     debug "Got MemPool!"
   | Tx _ ->
     debug "Got Tx!"
-  | FeeFilter _ ->
-    debug "Got FeeFilter!"
+  | FeeFilter fee ->
+    debug "Got FeeFilter: %Ld" fee
   | FilterAdd _ ->
     debug "Got FilterAdd!"
   | FilterClear ->
@@ -82,16 +89,24 @@ let process_msg w = function
   | FilterLoad _ ->
     debug "Got FilterLoad!"
 
-let rec consume_cs w cs =
-  let msg, cs = Message.of_cstruct cs in
-  process_msg w msg ;
-  if cs.Cstruct.off < cs.len then consume_cs w cs
-
 let handle_chunk w buf ~pos ~len =
-  debug "handle_chunk %d %d" pos len ;
-  let cs = Cstruct.of_bigarray buf ~off:pos ~len in
-  consume_cs w cs ;
-  return `Continue
+  debug "consume_cs %d %d" pos len ;
+  if len < MessageHeader.size then
+    return (`Consumed (0, `Need MessageHeader.size))
+  else
+    let cs = Cstruct.of_bigarray ~off:pos ~len buf in
+    let hdr, cs_payload = MessageHeader.of_cstruct cs in
+    let msg_size = MessageHeader.size + hdr.size in
+    if Cstruct.len cs_payload < hdr.size then
+      return (`Consumed (0, `Need msg_size))
+    else
+      match Message.of_cstruct cs with
+      | Error (Invalid_checksum h), cs ->
+        process_error w h ;
+        return (`Stop ())
+      | Ok (_, msg), cs ->
+        process_msg w hdr msg ;
+        return (`Consumed (msg_size, `Need_unknown))
 
 let main_loop port s r w =
   info "Connected!" ;
