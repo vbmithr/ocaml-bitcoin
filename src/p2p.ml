@@ -154,6 +154,49 @@ module MessageName = struct
   let show = to_string
 end
 
+module GetHashes = struct
+  type t = {
+    version : int ;
+    hashes : Hash256.t list ;
+    stop_hash : Hash256.t ;
+  } [@@deriving sexp]
+
+  let create ?(version=75015) ?(stop_hash=Hash256.empty) hashes =
+    { version ; hashes ; stop_hash }
+
+  let rec read_hash acc cs = function
+    | 0 -> List.rev acc, cs
+    | n ->
+      let h, cs = Hash256.of_cstruct cs in
+      read_hash (h :: acc) cs (Caml.pred n)
+
+  let of_cstruct cs =
+    let open Cstruct in
+    let version = LE.get_uint32 cs 0 |> Int32.to_int_exn in
+    let cs = shift cs 4 in
+    let nb_hashes, cs = CompactSize.of_cstruct_int cs in
+    let hashes, cs = read_hash [] cs nb_hashes in
+    let stop_hash, cs = Hash256.of_cstruct cs in
+    { version ; hashes ; stop_hash }, cs
+
+  let of_cstruct_only_hashes cs =
+    let open Cstruct in
+    let nb_hashes, cs = CompactSize.of_cstruct_int cs in
+    let hashes, cs = read_hash [] cs nb_hashes in
+    hashes, cs
+
+  let to_cstruct cs { version; hashes; stop_hash } =
+    let open Cstruct in
+    LE.set_uint32 cs 0 (Int32.of_int_exn version) ;
+    let nb_hashes = List.length hashes in
+    let cs = shift cs 4 in
+    let cs = CompactSize.to_cstruct_int cs nb_hashes in
+    let cs = List.fold_left hashes ~init:cs ~f:begin fun cs h ->
+        Hash256.to_cstruct cs h
+      end in
+    Hash256.to_cstruct cs stop_hash
+end
+
 module MessageHeader = struct
   type t = {
     network : Network.t ;
@@ -178,6 +221,11 @@ module MessageHeader = struct
   let pong ~network = {
     network ; msgname = Pong ;
     size = 8 ; checksum = "" ;
+  }
+
+  let getheaders ~network = {
+    network ; msgname = GetHeaders ;
+    size = 0 ; checksum = "" ;
   }
 
   let of_cstruct cs =
@@ -323,35 +371,6 @@ module Address = struct
     { timestamp ; services ; ipaddr ; port }, Cstruct.shift cs sizeof_t
 end
 
-module GetHashes = struct
-  type t = {
-    version : int ;
-    hashes : Hash256.set ;
-    stop_hash : Hash256.t ;
-  } [@@deriving sexp]
-
-  let rec read_hash acc cs = function
-    | 0 -> acc, cs
-    | n ->
-      let h, cs = Hash256.of_cstruct cs in
-      read_hash (Set.add acc h) cs (Caml.pred n)
-
-  let of_cstruct cs =
-    let open Cstruct in
-    let version = LE.get_uint32 cs 0 |> Int32.to_int_exn in
-    let cs = shift cs 4 in
-    let nb_hashes, cs = CompactSize.of_cstruct_int cs in
-    let hashes, cs = read_hash (Set.empty (module Hash256)) cs nb_hashes in
-    let stop_hash, cs = Hash256.of_cstruct cs in
-    { version ; hashes ; stop_hash }, cs
-
-  let of_cstruct_only_hashes cs =
-    let open Cstruct in
-    let nb_hashes, cs = CompactSize.of_cstruct_int cs in
-    let hashes, cs = read_hash (Set.empty (module Hash256)) cs nb_hashes in
-    hashes, cs
-end
-
 module Inv = struct
   type id =
     | Tx
@@ -386,7 +405,7 @@ module MerkleBlock = struct
   type t = {
     header : Header.t ;
     txn_count : int ;
-    hashes : Hash256.set ;
+    hashes : Hash256.t list ;
     flags : string ;
   } [@@deriving sexp]
 
@@ -625,7 +644,8 @@ module Message = struct
           let mblock, cs = MerkleBlock.of_cstruct payload in
           MerkleBlock mblock, cs
         | Headers ->
-          let hdrs, cs = ObjList.of_cstruct ~f:Header.of_cstruct payload in
+          let hdrs, cs =
+            ObjList.of_cstruct ~f:Header.of_cstruct_txcount payload in
           Headers hdrs, cs
         | Inv ->
           let invs, cs = ObjList.of_cstruct ~f:Inv.of_cstruct payload in
@@ -673,6 +693,13 @@ module Message = struct
       let payload_cs = Cstruct.shift cs MessageHeader.size in
       Cstruct.LE.set_uint64 payload_cs 0 i ;
       let end_cs = Cstruct.shift payload_cs 8 in
+      let size, checksum = Chksum.compute' payload_cs end_cs in
+      let _ = MessageHeader.to_cstruct cs { hdr with size ; checksum } in
+      end_cs
+    | GetHeaders hashes ->
+      let hdr = MessageHeader.getheaders ~network in
+      let payload_cs = Cstruct.shift cs MessageHeader.size in
+      let end_cs = GetHashes.to_cstruct payload_cs hashes in
       let size, checksum = Chksum.compute' payload_cs end_cs in
       let _ = MessageHeader.to_cstruct cs { hdr with size ; checksum } in
       end_cs

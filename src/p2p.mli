@@ -67,9 +67,15 @@ end
 module GetHashes : sig
   type t = {
     version : int ;
-    hashes : (Hash256.t, Hash256.comparator_witness) Set.t ;
+    hashes : Hash256.t list ;
     stop_hash : Hash256.t ;
   }
+
+  val create :
+    ?version:int -> ?stop_hash:Hash256.t -> Hash256.t list -> t
+
+  val to_cstruct :
+    Cstruct.t -> t -> Cstruct.t
 end
 
 module Inv : sig
@@ -88,7 +94,7 @@ module MerkleBlock : sig
   type t = {
     header : Header.t ;
     txn_count : int ;
-    hashes : Hash256.set ;
+    hashes : Hash256.t list ;
     flags : string ;
   }
 end

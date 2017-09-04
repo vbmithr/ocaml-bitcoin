@@ -79,22 +79,32 @@ module Hash256 = struct
   module T = struct
     type t = Hash of string [@@deriving sexp]
 
-    let empty = Hash (String.make 32 '\x00')
-    let of_hex h = Hash (Hex.to_string h)
+    let hash (Hash s) = String.hash s
 
     let compare (Hash a) (Hash b) = String.compare a b
 
-    include (val Comparator.make ~compare ~sexp_of_t)
+    (* include (val Comparator.make ~compare ~sexp_of_t) *)
 
     let of_string s =
       if String.length s <> 32 then
         invalid_arg "Hash.of_string"
       else Hash s
 
+    let empty = of_string (String.make 32 '\x00')
+    let of_hex h = of_string (Hex.to_string h)
+
+    let to_cstruct cs (Hash s) =
+      Cstruct.blit_from_string s 0 cs 0 32 ;
+      Cstruct.shift cs 32
+
     let to_string (Hash s) = s
 
-    let pp ppf (Hash s) = Format.fprintf ppf "%s" s
-    let show = to_string
+    let pp ppf (Hash s) =
+      let `Hex s_hex = Hex.of_string s in
+      Format.fprintf ppf "%s" s_hex
+
+    let show t =
+      Format.asprintf "%a" pp t
 
     let of_cstruct cs =
       Hash (Cstruct.copy cs 0 32),
@@ -110,13 +120,7 @@ module Hash256 = struct
       Hash (Digestif.((SHA256.Bytes.(digest (digest data)))))
   end
   include T
-  module HashSet = Set.M(T)
-  module HashMap = Map.M(T)
-
-  type set = HashSet.t
-  let set_of_sexp sexp = Set.m__t_of_sexp (module T) sexp
-  let sexp_of_set set = Set.sexp_of_m__t (module T) set
-  type 'a map = 'a HashMap.t
+  include Comparable.Make(T)
 end
 
 module Chksum = struct
@@ -230,8 +234,8 @@ module ObjList = struct
       inner obj_of_cstruct (obj :: acc) cs (Caml.pred n)
 
   let of_cstruct cs ~f =
-    let nb_addrs, cs = CompactSize.of_cstruct_int cs in
-    inner f [] cs nb_addrs
+    let nb_objs, cs = CompactSize.of_cstruct_int cs in
+    inner f [] cs nb_objs
 
   let to_cstruct cs objs ~f =
     let len = List.length objs in

@@ -2,4 +2,4 @@
  ((name node)
   (public_name bitcoin-node)
   (package bitcoin-node)
-  (libraries (bitcoin core async uri ocamlgraph))))
+  (libraries (bitcoin core async uri))))

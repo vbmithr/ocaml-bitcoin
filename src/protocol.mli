@@ -16,12 +16,16 @@ module Header : sig
   } [@@deriving sexp]
 
   val genesis : t
+  val genesis_hash : Hash256.t
 
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val hash : t -> int
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
+  val of_cstruct_txcount : Cstruct.t -> t * Cstruct.t
+  (** For reading headers from a Header P2P message. *)
+
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
 
   val size : int

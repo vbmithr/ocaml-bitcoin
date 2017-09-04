@@ -37,6 +37,10 @@ module Header = struct
     { version ; prev_block ; merkle_root ; timestamp ; bits ; nonce },
     Cstruct.shift cs sizeof_t
 
+  let of_cstruct_txcount cs =
+    let t, cs = of_cstruct cs in
+    t, Cstruct.shift cs 1
+
   let to_cstruct cs { version; prev_block; merkle_root; timestamp; bits; nonce } =
     let open CS.Header in
     set_t_version cs version ;
@@ -62,6 +66,9 @@ module Header = struct
     let Hash256.Hash s = hash256 t in
     let i32 = EndianString.BigEndian.get_int32 s 0 in
     Int32.(i32 lsr 1 |> to_int_exn)
+
+  let genesis_hash =
+    hash256 genesis
 end
 
 module Outpoint = struct

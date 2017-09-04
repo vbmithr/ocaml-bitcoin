@@ -32,13 +32,11 @@ end
 
 module Hash256 : sig
   type t = private Hash of string [@@deriving sexp]
-  type comparator_witness
+  include Comparable.S with type t := t
+  val hash : t -> int
 
   val empty : t
   val of_hex : Hex.t -> t
-
-  val compare : t -> t -> int
-  val comparator : (t, comparator_witness) Comparator.t
 
   val pp : Format.formatter -> t -> unit
   val show : t -> string
@@ -51,9 +49,7 @@ module Hash256 : sig
   val of_cstruct : Cstruct.t -> t * Cstruct.t
 
   val to_string : t -> string
-
-  type set = (t, comparator_witness) Set.t [@@deriving sexp]
-  type 'a map = (t, 'a, comparator_witness) Map.t
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
 end
 
 module Chksum : sig

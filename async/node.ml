@@ -5,9 +5,10 @@ open Bitcoin.Protocol
 open Bitcoin.P2p
 open Log.Global
 
-module HGraph = Graph.Imperative.Digraph.Concrete(Header)
-let headers = HGraph.create ()
-let best_header : Header.t option ref = ref None
+module HTable = Hashtbl.Make(Hash256)
+
+let headers = HTable.create ()
+let best_hh = ref Header.genesis_hash
 
 let buf = Cstruct.create 4096
 let network = ref Network.Mainnet
@@ -20,11 +21,18 @@ let write_cstruct2 w cs cs2 =
   let len = cs2.Cstruct.off - cs.Cstruct.off in
   Writer.write_bigstring w cs.buffer ~pos:cs.off ~len
 
+let request_hdrs w start =
+  let msg =
+    Message.GetHeaders (GetHashes.create [start]) in
+  let cs = Message.to_cstruct ~network:!network buf msg in
+  write_cstruct2 w buf cs ;
+  debug "Sent GetHeaders"
+
 let process_error w header =
   sexp ~level:`Error (MessageHeader.sexp_of_t header)
 
 let process_msg w header msg =
-  sexp ~level:`Debug (Message.sexp_of_t msg) ;
+  (* sexp ~level:`Debug (Message.sexp_of_t msg) ; *)
   match msg with
   | Message.Version { version; services; timestamp; recv_services; recv_ipaddr; recv_port;
                       trans_services; trans_ipaddr; trans_port; nonce; user_agent; start_height;
@@ -34,6 +42,8 @@ let process_msg w header msg =
     debug "Sent VerAck"
   | VerAck ->
     debug "Got VerAck!" ;
+    (* Requesting headers *)
+    request_hdrs w Header.genesis_hash
   | Reject rej ->
     error "%s" (Format.asprintf "%a" Reject.pp rej)
   | SendHeaders ->
@@ -69,8 +79,16 @@ let process_msg w header msg =
     debug "Got Block!"
   | MerkleBlock _ ->
     debug "Got MerkleBlock!"
-  | Headers _ ->
-    debug "Got Headers!"
+  | Headers hdrs ->
+    List.iteri hdrs ~f:begin fun i h ->
+      let hh = Header.hash256 h in
+      (* debug "Got block header %d: %s" i (Hash256.show hh) ; *)
+      HTable.set headers hh h ;
+      best_hh := hh
+    end ;
+    debug "headers table has %d entries" (HTable.length headers) ;
+    if List.length hdrs = 2000 then
+      request_hdrs w !best_hh
   | Inv invs ->
     List.iter invs ~f:begin fun inv ->
       sexp ~level:`Debug (Inv.sexp_of_t inv)
