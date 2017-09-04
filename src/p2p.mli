@@ -67,8 +67,8 @@ end
 module GetHashes : sig
   type t = {
     version : int ;
-    hashes : (Hash.t, Hash.comparator_witness) Set.t ;
-    stop_hash : Hash.t ;
+    hashes : (Hash256.t, Hash256.comparator_witness) Set.t ;
+    stop_hash : Hash256.t ;
   }
 end
 
@@ -80,7 +80,7 @@ module Inv : sig
 
   type t = {
     id : id ;
-    hash : Hash.t ;
+    hash : Hash256.t ;
   } [@@deriving sexp]
 end
 
@@ -88,7 +88,7 @@ module MerkleBlock : sig
   type t = {
     header : Header.t ;
     txn_count : int ;
-    hashes : Hash.set ;
+    hashes : Hash256.set ;
     flags : string ;
   }
 end
@@ -157,16 +157,16 @@ module Reject : sig
   module Code : sig
     type t =
       | Decode_error
-      | Invalid_block of Hash.t
-      | Invalid_transaction of Hash.t
-      | Block_version_too_old of Hash.t
+      | Invalid_block of Hash256.t
+      | Invalid_transaction of Hash256.t
+      | Block_version_too_old of Hash256.t
       | Protocol_too_old
-      | Double_spend of Hash.t
+      | Double_spend of Hash256.t
       | Too_many_version_messages
-      | Non_standard_transaction of Hash.t
-      | Dust of Hash.t
-      | Fee_too_low of Hash.t
-      | Wrong_blockchain of Hash.t
+      | Non_standard_transaction of Hash256.t
+      | Dust of Hash256.t
+      | Fee_too_low of Hash256.t
+      | Wrong_blockchain of Hash256.t
   end
 
   type t = {

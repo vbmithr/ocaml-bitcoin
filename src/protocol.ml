@@ -10,19 +10,28 @@ module CS = Bitcoin_cstruct
 module Header = struct
   type t = {
     version : Int32.t ;
-    prev_block : Hash.t ;
-    merkle_root : Hash.t ;
+    prev_block : Hash256.t ;
+    merkle_root : Hash256.t ;
     timestamp : Timestamp.t ;
     bits : Int32.t ;
     nonce : Int32.t ;
   } [@@deriving sexp]
 
+  let genesis = {
+    version = 1l ;
+    prev_block = Hash256.empty ;
+    merkle_root = Hash256.of_hex (`Hex "3BA3EDFD7A7B12B27AC72C3E67768F617FC81BC3888A51323A9FB8AA4B1E5E4A") ;
+    timestamp = Timestamp.of_int_sec 1231006505 ;
+    bits = 0x1d00ffffl ;
+    nonce = 2083236893l ;
+  }
+
   let of_cstruct cs =
     let open CS.Header in
     let version = get_t_version cs in
-    let prev_block, _ = get_t_prev_block cs |> Hash.of_cstruct in
-    let merkle_root, _ = get_t_merkle_root cs |> Hash.of_cstruct in
-    let timestamp = get_t_timestamp cs |> Timestamp.of_int32 in
+    let prev_block, _ = get_t_prev_block cs |> Hash256.of_cstruct in
+    let merkle_root, _ = get_t_merkle_root cs |> Hash256.of_cstruct in
+    let timestamp = get_t_timestamp cs |> Timestamp.of_int32_sec in
     let bits = get_t_bits cs in
     let nonce = get_t_nonce cs in
     { version ; prev_block ; merkle_root ; timestamp ; bits ; nonce },
@@ -31,23 +40,39 @@ module Header = struct
   let to_cstruct cs { version; prev_block; merkle_root; timestamp; bits; nonce } =
     let open CS.Header in
     set_t_version cs version ;
-    set_t_prev_block (Hash.to_string prev_block) 0 cs ;
-    set_t_merkle_root (Hash.to_string merkle_root) 0 cs ;
-    set_t_timestamp cs (Timestamp.to_int32 timestamp) ;
+    set_t_prev_block (Hash256.to_string prev_block) 0 cs ;
+    set_t_merkle_root (Hash256.to_string merkle_root) 0 cs ;
+    set_t_timestamp cs (Timestamp.to_int32_sec timestamp) ;
     set_t_bits cs bits ;
     set_t_nonce cs nonce ;
     Cstruct.shift cs sizeof_t
+
+  let size =
+    CS.Header.sizeof_t
+
+  let hash256 t =
+    let cs = Cstruct.create size in
+    let _ = to_cstruct cs t in
+    Hash256.compute_cstruct cs
+
+  let compare = Caml.Pervasives.compare
+  let equal = Caml.Pervasives.(=)
+
+  let hash t =
+    let Hash256.Hash s = hash256 t in
+    let i32 = EndianString.BigEndian.get_int32 s 0 in
+    Int32.(i32 lsr 1 |> to_int_exn)
 end
 
 module Outpoint = struct
   type t = {
-    hash : Hash.t ;
+    hash : Hash256.t ;
     i : int ;
   } [@@deriving sexp]
 
   let of_cstruct cs =
     let open CS.Outpoint in
-    let hash, _ = get_t_hash cs |> Hash.of_cstruct in
+    let hash, _ = get_t_hash cs |> Hash256.of_cstruct in
     let i = get_t_index cs |> Int32.to_int_exn in
     { hash ; i }, Cstruct.shift cs sizeof_t
 end
@@ -89,7 +114,7 @@ module Transaction = struct
     let of_int32 i =
       if Int32.(i < 500_000_000l)
       then Block (Int32.to_int_exn i)
-      else Timestamp (Timestamp.of_int32 i)
+      else Timestamp (Timestamp.of_int32_sec i)
 
     let of_cstruct cs =
       of_int32 (Cstruct.LE.get_uint32 cs 0), Cstruct.shift cs 4

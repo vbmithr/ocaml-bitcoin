@@ -265,7 +265,7 @@ module Version = struct
     let open CS.Version in
     let version = get_t_version cs |> Int32.to_int_exn in
     let services = get_t_services cs |> Service.of_int64 in
-    let timestamp = get_t_timestamp cs |> Timestamp.of_int64 in
+    let timestamp = get_t_timestamp cs |> Timestamp.of_int64_sec in
     let recv_services = get_t_recv_services cs |> Service.of_int64 in
     let recv_ipaddr = get_t_recv_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
     let recv_port = Cstruct.BE.get_uint16 (get_t_recv_port cs) 0 in
@@ -291,7 +291,7 @@ module Version = struct
     let open CS.Version in
     set_t_version cs (Int32.of_int_exn msg.version) ;
     set_t_services cs (Service.to_int64 msg.services) ;
-    set_t_timestamp cs (Timestamp.to_int64 msg.timestamp) ;
+    set_t_timestamp cs (Timestamp.to_int64_sec msg.timestamp) ;
     set_t_recv_services cs (Service.to_int64 msg.recv_services) ;
     set_t_recv_ipaddr (Ipaddr.V6.to_bytes msg.recv_ipaddr) 0 cs ;
     Cstruct.BE.set_uint16 (get_t_recv_port cs) 0 msg.recv_port ;
@@ -316,7 +316,7 @@ module Address = struct
 
   let of_cstruct cs =
     let open CS.Address in
-    let timestamp = get_t_timestamp cs |> Timestamp.of_int32 in
+    let timestamp = get_t_timestamp cs |> Timestamp.of_int32_sec in
     let services = get_t_services cs |> Service.of_int64 in
     let ipaddr = get_t_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
     let port = Cstruct.BE.get_uint16 (get_t_port cs) 0 in
@@ -326,14 +326,14 @@ end
 module GetHashes = struct
   type t = {
     version : int ;
-    hashes : Hash.set ;
-    stop_hash : Hash.t ;
+    hashes : Hash256.set ;
+    stop_hash : Hash256.t ;
   } [@@deriving sexp]
 
   let rec read_hash acc cs = function
     | 0 -> acc, cs
     | n ->
-      let h, cs = Hash.of_cstruct cs in
+      let h, cs = Hash256.of_cstruct cs in
       read_hash (Set.add acc h) cs (Caml.pred n)
 
   let of_cstruct cs =
@@ -341,14 +341,14 @@ module GetHashes = struct
     let version = LE.get_uint32 cs 0 |> Int32.to_int_exn in
     let cs = shift cs 4 in
     let nb_hashes, cs = CompactSize.of_cstruct_int cs in
-    let hashes, cs = read_hash (Set.empty (module Hash)) cs nb_hashes in
-    let stop_hash, cs = Hash.of_cstruct cs in
+    let hashes, cs = read_hash (Set.empty (module Hash256)) cs nb_hashes in
+    let stop_hash, cs = Hash256.of_cstruct cs in
     { version ; hashes ; stop_hash }, cs
 
   let of_cstruct_only_hashes cs =
     let open Cstruct in
     let nb_hashes, cs = CompactSize.of_cstruct_int cs in
-    let hashes, cs = read_hash (Set.empty (module Hash)) cs nb_hashes in
+    let hashes, cs = read_hash (Set.empty (module Hash256)) cs nb_hashes in
     hashes, cs
 end
 
@@ -367,13 +367,13 @@ module Inv = struct
 
   type t = {
     id : id ;
-    hash : Hash.t ;
+    hash : Hash256.t ;
   } [@@deriving sexp]
 
   let of_cstruct cs =
     let open CS.Inv in
     let id = get_t_id cs |> id_of_int32 in
-    let hash, _ = get_t_hash cs |> Hash.of_cstruct in
+    let hash, _ = get_t_hash cs |> Hash256.of_cstruct in
     { id ; hash }, Cstruct.shift cs sizeof_t
 end
 
@@ -386,7 +386,7 @@ module MerkleBlock = struct
   type t = {
     header : Header.t ;
     txn_count : int ;
-    hashes : Hash.set ;
+    hashes : Hash256.set ;
     flags : string ;
   } [@@deriving sexp]
 
@@ -444,30 +444,30 @@ module Reject = struct
   module Code = struct
     type t =
       | Decode_error
-      | Invalid_block of Hash.t
-      | Invalid_transaction of Hash.t
-      | Block_version_too_old of Hash.t
+      | Invalid_block of Hash256.t
+      | Invalid_transaction of Hash256.t
+      | Block_version_too_old of Hash256.t
       | Protocol_too_old
-      | Double_spend of Hash.t
+      | Double_spend of Hash256.t
       | Too_many_version_messages
-      | Non_standard_transaction of Hash.t
-      | Dust of Hash.t
-      | Fee_too_low of Hash.t
-      | Wrong_blockchain of Hash.t
+      | Non_standard_transaction of Hash256.t
+      | Dust of Hash256.t
+      | Fee_too_low of Hash256.t
+      | Wrong_blockchain of Hash256.t
     [@@deriving sexp]
 
     let pp ppf = function
       | Decode_error -> Format.fprintf ppf "decode error"
-      | Invalid_block h -> Format.fprintf ppf "invalid block %a" Hash.pp h
-      | Invalid_transaction h -> Format.fprintf ppf "invalid transaction %a" Hash.pp h
-      | Block_version_too_old h -> Format.fprintf ppf "block version too old %a" Hash.pp h
+      | Invalid_block h -> Format.fprintf ppf "invalid block %a" Hash256.pp h
+      | Invalid_transaction h -> Format.fprintf ppf "invalid transaction %a" Hash256.pp h
+      | Block_version_too_old h -> Format.fprintf ppf "block version too old %a" Hash256.pp h
       | Protocol_too_old -> Format.fprintf ppf "protocol too old"
-      | Double_spend h -> Format.fprintf ppf "double spend %a" Hash.pp h
+      | Double_spend h -> Format.fprintf ppf "double spend %a" Hash256.pp h
       | Too_many_version_messages -> Format.fprintf ppf "too many version messages"
-      | Non_standard_transaction h -> Format.fprintf ppf "non standard transaction %a" Hash.pp h
-      | Dust h -> Format.fprintf ppf "dust %a" Hash.pp h
-      | Fee_too_low h -> Format.fprintf ppf "fee too low %a" Hash.pp h
-      | Wrong_blockchain h -> Format.fprintf ppf "wrong blockchain %a" Hash.pp h
+      | Non_standard_transaction h -> Format.fprintf ppf "non standard transaction %a" Hash256.pp h
+      | Dust h -> Format.fprintf ppf "dust %a" Hash256.pp h
+      | Fee_too_low h -> Format.fprintf ppf "fee too low %a" Hash256.pp h
+      | Wrong_blockchain h -> Format.fprintf ppf "wrong blockchain %a" Hash256.pp h
 
     let show t =
       Format.asprintf "%a" pp t
@@ -492,32 +492,32 @@ module Reject = struct
     match code, rejected_message with
     | 0x01, _ -> Decode_error, cs
     | 0x10, MessageName.Block ->
-      let hash, cs = Hash.of_cstruct cs in
+      let hash, cs = Hash256.of_cstruct cs in
       Invalid_block hash, cs
     | 0x10, Tx ->
-      let hash, cs = Hash.of_cstruct cs in
+      let hash, cs = Hash256.of_cstruct cs in
       Invalid_transaction hash, cs
     | 0x11, Block ->
-      let hash, cs = Hash.of_cstruct cs in
+      let hash, cs = Hash256.of_cstruct cs in
       Block_version_too_old hash, cs
     | 0x11, Version ->
       Protocol_too_old, cs
     | 0x12, Tx ->
-      let hash, cs = Hash.of_cstruct cs in
+      let hash, cs = Hash256.of_cstruct cs in
       Double_spend hash, cs
     | 0x12, Version ->
       Too_many_version_messages, cs
     | 0x40, Tx ->
-      let hash, cs = Hash.of_cstruct cs in
+      let hash, cs = Hash256.of_cstruct cs in
       Non_standard_transaction hash, cs
     | 0x41, Tx ->
-      let hash, cs = Hash.of_cstruct cs in
+      let hash, cs = Hash256.of_cstruct cs in
       Dust hash, cs
     | 0x42, Tx ->
-      let hash, cs = Hash.of_cstruct cs in
+      let hash, cs = Hash256.of_cstruct cs in
       Fee_too_low hash, cs
     | 0x43, Block ->
-      let hash, cs = Hash.of_cstruct cs in
+      let hash, cs = Hash256.of_cstruct cs in
       Wrong_blockchain hash, cs
     | _ -> failwith "Unsupported"
 

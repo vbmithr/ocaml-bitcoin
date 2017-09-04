@@ -8,20 +8,31 @@ open Util
 module Header : sig
   type t = {
     version : Int32.t ;
-    prev_block : Hash.t ;
-    merkle_root : Hash.t ;
+    prev_block : Hash256.t ;
+    merkle_root : Hash256.t ;
     timestamp : Timestamp.t ;
     bits : Int32.t ;
     nonce : Int32.t ;
   } [@@deriving sexp]
 
+  val genesis : t
+
+  val compare : t -> t -> int
+  val equal : t -> t -> bool
+  val hash : t -> int
+
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
+
+  val size : int
+  (** Serialized size *)
+
+  val hash256 : t -> Hash256.t
 end
 
 module Outpoint : sig
   type t = {
-    hash : Hash.t ;
+    hash : Hash256.t ;
     i : int ;
   }
 end

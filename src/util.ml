@@ -40,12 +40,30 @@ module Timestamp = struct
     let open Sexplib.Std in
     sexp_of_string (to_rfc3339 t)
 
-  let of_int64 i =
-    match Int64.to_float i |> Ptime.of_float_s with
-    | None -> invalid_arg "Timestamp.of_int64"
-    | Some ts -> ts
+  let of_int_sec s =
+    match Span.of_int_s s |> of_span with
+    | None -> invalid_arg "Timestamp.of_int_sec"
+    | Some t -> t
 
-  let to_int64 t = Int64.of_float (Ptime.to_float_s t)
+  let to_int_sec t =
+    match Span.to_int_s (to_span t) with
+    | None -> invalid_arg "Timestamp.to_int_sec"
+    | Some s -> s
+
+  let of_int32_sec s =
+    of_int_sec (Int32.to_int_exn s)
+
+  let to_int32_sec s=
+    Int32.of_int_exn (to_int_sec s)
+
+  let of_int64_sec s =
+    of_int_sec (Int64.to_int_exn s)
+
+  let to_int64_sec s =
+    Int64.of_int_exn (to_int_sec s)
+
+  (* let of_int64 i = *)
+  (* let to_int64 t = Int64.of_float (Ptime.to_float_s t) *)
 
   let of_int32 i =
     match Int32.to_float i |> Ptime.of_float_s with
@@ -57,16 +75,21 @@ module Timestamp = struct
   include Ptime_clock
 end
 
-module Hash = struct
+module Hash256 = struct
   module T = struct
     type t = Hash of string [@@deriving sexp]
+
+    let empty = Hash (String.make 32 '\x00')
+    let of_hex h = Hash (Hex.to_string h)
 
     let compare (Hash a) (Hash b) = String.compare a b
 
     include (val Comparator.make ~compare ~sexp_of_t)
 
     let of_string s =
-      if String.length s <> 32 then invalid_arg "Hash.of_string" else Hash s
+      if String.length s <> 32 then
+        invalid_arg "Hash.of_string"
+      else Hash s
 
     let to_string (Hash s) = s
 
@@ -76,6 +99,15 @@ module Hash = struct
     let of_cstruct cs =
       Hash (Cstruct.copy cs 0 32),
       Cstruct.shift cs 32
+
+    let compute_bigarray data =
+      Hash (Digestif.(Bi.to_string (SHA256.Bigstring.(digest (digest data)))))
+
+    let compute_cstruct cs =
+      compute_bigarray (Cstruct.to_bigarray cs)
+
+    let compute_string data =
+      Hash (Digestif.((SHA256.Bytes.(digest (digest data)))))
   end
   include T
   module HashSet = Set.M(T)

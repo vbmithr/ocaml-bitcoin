@@ -5,13 +5,15 @@ open Bitcoin.Protocol
 open Bitcoin.P2p
 open Log.Global
 
+module HGraph = Graph.Imperative.Digraph.Concrete(Header)
+let headers = HGraph.create ()
+let best_header : Header.t option ref = ref None
+
 let buf = Cstruct.create 4096
 let network = ref Network.Mainnet
 
-let headers : Header.t String.Table.t = String.Table.create ()
-
 let write_cstruct w (cs : Cstruct.t) =
-  debug "write_cstruct %d %d" cs.off cs.len ;
+  (* debug "write_cstruct %d %d" cs.off cs.len ; *)
   Writer.write_bigstring w cs.buffer ~pos:cs.off ~len:cs.len
 
 let write_cstruct2 w cs cs2 =
@@ -22,7 +24,6 @@ let process_error w header =
   sexp ~level:`Error (MessageHeader.sexp_of_t header)
 
 let process_msg w header msg =
-  sexp ~level:`Debug (MessageHeader.sexp_of_t header) ;
   sexp ~level:`Debug (Message.sexp_of_t msg) ;
   match msg with
   | Message.Version { version; services; timestamp; recv_services; recv_ipaddr; recv_port;
@@ -37,14 +38,14 @@ let process_msg w header msg =
     error "%s" (Format.asprintf "%a" Reject.pp rej)
   | SendHeaders ->
     debug "Got SendHeaders!" ;
-    let nb_headers = String.Table.length headers in
-    let cs = CompactSize.to_cstruct_int buf nb_headers in
-    write_cstruct2 w buf cs ;
-    String.Table.iter headers ~f:begin fun h ->
-      let cs = Header.to_cstruct buf h in
-      write_cstruct2 w buf cs
-    end ;
-    debug "Sent %d headers" nb_headers
+    (* let nb_headers = String.Table.length headers in *)
+    (* let cs = CompactSize.to_cstruct_int buf nb_headers in *)
+    (* write_cstruct2 w buf cs ; *)
+    (* String.Table.iter headers ~f:begin fun h -> *)
+    (*   let cs = Header.to_cstruct buf h in *)
+    (*   write_cstruct2 w buf cs *)
+    (* end ; *)
+    (* debug "Sent %d headers" nb_headers *)
   | SendCmpct t ->
     sexp ~level:`Debug (SendCmpct.sexp_of_t t) ;
   | GetAddr ->
@@ -90,7 +91,7 @@ let process_msg w header msg =
     debug "Got FilterLoad!"
 
 let handle_chunk w buf ~pos ~len =
-  debug "consume_cs %d %d" pos len ;
+  (* debug "consume_cs %d %d" pos len ; *)
   if len < MessageHeader.size then
     return (`Consumed (0, `Need MessageHeader.size))
   else

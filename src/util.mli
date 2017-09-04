@@ -20,22 +20,32 @@ module Timestamp : sig
   val t_of_sexp : Sexplib.Sexp.t -> t
   val sexp_of_t : t -> Sexplib.Sexp.t
 
-  val of_int64 : Int64.t -> t
-  val to_int64 : t -> Int64.t
-  val of_int32 : Int32.t -> t
-  val to_int32 : t -> Int32.t
+  val of_int_sec : int -> t
+  val to_int_sec : t -> int
+  val of_int64_sec : Int64.t -> t
+  val to_int64_sec : t -> Int64.t
+  val of_int32_sec : Int32.t -> t
+  val to_int32_sec : t -> Int32.t
 
   val now : unit -> t
 end
 
-module Hash : sig
+module Hash256 : sig
   type t = private Hash of string [@@deriving sexp]
   type comparator_witness
 
+  val empty : t
+  val of_hex : Hex.t -> t
+
+  val compare : t -> t -> int
   val comparator : (t, comparator_witness) Comparator.t
 
   val pp : Format.formatter -> t -> unit
   val show : t -> string
+
+  val compute_bigarray : Cstruct.buffer -> t
+  val compute_cstruct : Cstruct.t -> t
+  val compute_string : string -> t
 
   val of_string : string -> t
   val of_cstruct : Cstruct.t -> t * Cstruct.t
