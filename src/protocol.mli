@@ -39,6 +39,9 @@ module Outpoint : sig
     hash : Hash256.t ;
     i : int ;
   }
+
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
 end
 
 module TxIn : sig
