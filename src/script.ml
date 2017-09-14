@@ -3,8 +3,7 @@ open Util
 
 module Opcode = struct
   type t =
-    | Op_zero
-    | Op_data of int
+    | Op_pushdata of int
     | Op_pushdata1
     | Op_pushdata2
     | Op_pushdata4
@@ -121,8 +120,7 @@ module Opcode = struct
   [@@deriving sexp]
 
   let to_int = function
-    | Op_zero -> 0
-    | Op_data n -> if n < 1 || n > 75 then failwith "Script.to_int" else n
+    | Op_pushdata n -> if n < 0 || n > 75 then failwith "Script.to_int" else n
     | Op_pushdata1 -> 76
     | Op_pushdata2 -> 77
     | Op_pushdata4 -> 78
@@ -238,8 +236,7 @@ module Opcode = struct
     | Op_nop10 -> 185
 
   let of_int = function
-    | 0 -> Op_zero
-    | n when n > 0 && n < 76  -> Op_data n
+    | n when n >= 0 && n < 76  -> Op_pushdata n
     | 76 -> Op_pushdata1
     | 77 -> Op_pushdata2
     | 78 -> Op_pushdata4
@@ -375,9 +372,20 @@ module Element = struct
     | D buf ->
       Cstruct.blit buf buf.off cs 0 buf.len ;
       Cstruct.shift cs buf.len
+
+  let length = function
+    | O _ -> 1
+    | D cs -> Cstruct.len cs
 end
 
 type t = Element.t list [@@deriving sexp]
+
+let size elts =
+  let size =
+    Base.List.fold_left elts ~init:0 ~f:begin fun acc e ->
+      acc + Element.length e
+    end in
+  CompactSize.size (Int size) + size
 
 let read_all cs =
   let open Element in
@@ -393,16 +401,16 @@ let read_all cs =
     else
       let elt, cs = Opcode.of_cstruct cs in
       match elt with
-      | Op_data n -> inner acc n cs
+      | Op_pushdata n -> inner (O (Op_pushdata n) :: acc) n cs
       | Op_pushdata1 ->
         let data_len = Cstruct.get_uint8 cs 0 in
-        inner acc data_len (Cstruct.shift cs 1)
+        inner (O Op_pushdata1 :: acc) data_len (Cstruct.shift cs 1)
       | Op_pushdata2 ->
         let data_len = Cstruct.LE.get_uint16 cs 0 in
-        inner acc data_len (Cstruct.shift cs 2)
+        inner (O Op_pushdata2 :: acc) data_len (Cstruct.shift cs 2)
       | Op_pushdata4 ->
         let data_len = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
-        inner acc data_len (Cstruct.shift cs 4)
+        inner (O Op_pushdata4 :: acc) data_len (Cstruct.shift cs 4)
       | op ->
         inner (O op :: acc) 0 cs
   in
@@ -471,11 +479,10 @@ module Run = struct
     and eval_main iflevel stack altstack code =
       match code, stack with
       | Element.D buf :: rest, _ -> eval_main iflevel (buf :: stack) altstack rest
-      | O Op_zero :: _, _ -> invalid_arg "Run.eval: Op_zero"
-      | O (Op_data _) :: _, _ -> invalid_arg "Run.eval: Op_data"
-      | O Op_pushdata1 :: _, _ -> invalid_arg "Run.eval: Op_pushdata1"
-      | O Op_pushdata2 :: _, _ -> invalid_arg "Run.eval: Op_pushdata2"
-      | O Op_pushdata4 :: _, _ -> invalid_arg "Run.eval: Op_pushdata4"
+      | O (Op_pushdata _) :: rest, _
+      | O Op_pushdata1 :: rest, _
+      | O Op_pushdata2 :: rest, _
+      | O Op_pushdata4 :: rest, _ -> eval_main iflevel stack altstack rest
       | O Op_1negate :: rest, _ -> eval_main iflevel (Stack.of_int32 (-1l) :: stack) altstack rest
       | O Op_1 :: rest, _ -> eval_main iflevel (Stack.of_int32 1l :: stack) altstack rest
       | O Op_2 :: rest, _ -> eval_main iflevel (Stack.of_int32 2l :: stack) altstack rest

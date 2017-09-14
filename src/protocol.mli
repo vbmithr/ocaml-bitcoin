@@ -20,7 +20,7 @@ module Header : sig
 
   val compare : t -> t -> int
   val equal : t -> t -> bool
-  val hash : t -> int
+  (* val hash : t -> int *)
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val of_cstruct_txcount : Cstruct.t -> t * Cstruct.t
@@ -50,6 +50,8 @@ module TxIn : sig
     script : Script.t ;
     seq : Int32.t ;
   }
+
+  val size : t -> int
 end
 
 module TxOut : sig
@@ -57,6 +59,8 @@ module TxOut : sig
     value : Int64.t ;
     script : Script.t ;
   }
+
+  val size : t -> int
 end
 
 module Transaction : sig
@@ -74,6 +78,9 @@ module Transaction : sig
   } [@@deriving sexp]
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
+
+  val size : t -> int
+  val hash256 : t -> Hash256.t
 end
 
 module Block : sig

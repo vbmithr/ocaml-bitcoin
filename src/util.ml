@@ -149,6 +149,13 @@ module CompactSize = struct
     | Int32 of Int32.t
     | Int64 of Int64.t
 
+  let size = function
+    | Int n when n < 0xFD -> 1
+    | Int n when n < 0x10000 -> 3
+    | Int n -> 5
+    | Int32 n -> 5
+    | Int64 n -> 9
+
   let read ?(pos=0) buf =
     let open EndianString.LittleEndian in
     match get_uint8 buf pos with
@@ -227,6 +234,11 @@ module VarString = struct
 end
 
 module ObjList = struct
+  let size elts ~f =
+    List.fold_left elts
+      ~init:(CompactSize.size (Int (List.length elts)))
+      ~f:(fun a e -> a + f e)
+
   let rec inner obj_of_cstruct acc cs = function
     | 0 -> List.rev acc, cs
     | n ->

@@ -69,6 +69,8 @@ module CompactSize : sig
     | Int32 of Int32.t
     | Int64 of Int64.t
 
+  val size : t -> int
+
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val of_cstruct_int : Cstruct.t -> int * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
@@ -81,6 +83,8 @@ module VarString : sig
 end
 
 module ObjList : sig
+  val size : 'a list -> f:('a -> int) -> int
+
   val of_cstruct :
     Cstruct.t -> f:(Cstruct.t -> 'a * Cstruct.t) -> 'a list * Cstruct.t
 

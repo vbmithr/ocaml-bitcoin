@@ -2,8 +2,7 @@ open Base
 
 module Opcode : sig
   type t =
-    | Op_zero
-    | Op_data of int
+    | Op_pushdata of int
     | Op_pushdata1
     | Op_pushdata2
     | Op_pushdata4
@@ -126,6 +125,8 @@ module Element : sig
 end
 
 type t = Element.t list [@@deriving sexp]
+
+val size : t -> int
 
 val of_cstruct : Cstruct.t -> t * Cstruct.t
 val to_cstruct : Cstruct.t -> Element.t list -> Cstruct.t

@@ -62,10 +62,10 @@ module Header = struct
   let compare = Caml.Pervasives.compare
   let equal = Caml.Pervasives.(=)
 
-  let hash t =
-    let Hash256.Hash s = hash256 t in
-    let i32 = EndianString.BigEndian.get_int32 s 0 in
-    Int32.(i32 lsr 1 |> to_int_exn)
+  (* let hash t = *)
+  (*   let Hash256.Hash s = hash256 t in *)
+  (*   let i32 = EndianString.BigEndian.get_int32 s 0 in *)
+  (*   Int32.(i32 lsr 1 |> to_int_exn) *)
 
   let genesis_hash =
     hash256 genesis
@@ -76,6 +76,9 @@ module Outpoint = struct
     hash : Hash256.t ;
     i : int ;
   } [@@deriving sexp]
+
+  let size =
+    CS.Outpoint.sizeof_t
 
   let of_cstruct cs =
     let open CS.Outpoint in
@@ -97,11 +100,20 @@ module TxIn = struct
     seq : Int32.t ;
   } [@@deriving sexp]
 
+  let size { script } =
+    Outpoint.size + Script.size script + 4
+
   let of_cstruct cs =
     let prev_out, cs = Outpoint.of_cstruct cs in
     let script, cs = Script.of_cstruct cs in
     let seq = Cstruct.LE.get_uint32 cs 0 in
     { prev_out ; script ; seq }, Cstruct.shift cs 4
+
+  let to_cstruct cs { prev_out ; script ; seq } =
+    let cs = Outpoint.to_cstruct cs prev_out in
+    let cs = Script.to_cstruct cs script in
+    Cstruct.LE.set_uint32 cs 0 seq ;
+    Cstruct.shift cs 4
 end
 
 module TxOut = struct
@@ -110,11 +122,19 @@ module TxOut = struct
     script : Script.t ;
   } [@@deriving sexp]
 
+  let size { script } =
+    8 + Script.size script
+
   let of_cstruct cs =
     let value = Cstruct.LE.get_uint64 cs 0 in
     let cs = Cstruct.shift cs 8 in
     let script, cs = Script.of_cstruct cs in
     { value ; script }, cs
+
+  let to_cstruct cs { value ; script } =
+    Cstruct.LE.set_uint64 cs 0 value ;
+    let cs = Cstruct.shift cs 8 in
+    Script.to_cstruct cs script
 end
 
 module Transaction = struct
@@ -129,8 +149,16 @@ module Transaction = struct
       then Block (Int32.to_int_exn i)
       else Timestamp (Timestamp.of_int32_sec i)
 
+    let to_int32 = function
+      | Block n -> Int32.of_int_exn n
+      | Timestamp ts -> Timestamp.to_int32_sec ts
+
     let of_cstruct cs =
       of_int32 (Cstruct.LE.get_uint32 cs 0), Cstruct.shift cs 4
+
+    let to_cstruct cs t =
+      Cstruct.LE.set_uint32 cs 0 (to_int32 t) ;
+      Cstruct.shift cs 4
   end
 
   type t = {
@@ -140,6 +168,9 @@ module Transaction = struct
     lock_time : LockTime.t ;
   } [@@deriving sexp]
 
+  let size { tx_in ; tx_out } =
+    8 + ObjList.(size tx_in ~f:TxIn.size + size tx_out ~f:TxOut.size)
+
   let of_cstruct cs =
     let version = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int_exn in
     let cs = Cstruct.shift cs 4 in
@@ -147,6 +178,18 @@ module Transaction = struct
     let tx_out, cs = ObjList.of_cstruct ~f:TxOut.of_cstruct cs in
     let lock_time, cs = LockTime.of_cstruct cs in
     { version ; tx_in ; tx_out ; lock_time }, cs
+
+  let to_cstruct cs { version ; tx_in ; tx_out ; lock_time } =
+    Cstruct.LE.set_uint32 cs 0 (Int32.of_int_exn version) ;
+    let cs = Cstruct.shift cs 4 in
+    let cs = ObjList.to_cstruct cs tx_in ~f:TxIn.to_cstruct in
+    let cs = ObjList.to_cstruct cs tx_out ~f:TxOut.to_cstruct in
+    LockTime.to_cstruct cs lock_time
+
+  let hash256 t =
+    let cs = Cstruct.create (size t) in
+    let _ = to_cstruct cs t in
+    Hash256.compute_cstruct cs
 end
 
 module Block = struct
