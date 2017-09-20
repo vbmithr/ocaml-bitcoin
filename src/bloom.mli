@@ -1,11 +1,9 @@
 type t = private {
   filter : Bitv.t ;
+  len : int ;
   nb_funcs : int ;
   tweak : Int32.t ;
 } [@@deriving sexp]
-
-val filter_len : t -> int
-(** [filter_len t] is Bitv.length t.filter. *)
 
 val create : int -> float -> Int32.t -> t
 (** [create max_elts false_pos_rate tweak] is a bloom filter

@@ -507,11 +507,10 @@ module FilterLoad = struct
     { filter ; flag }, Cstruct.shift cs 9
 
   let to_cstruct cs { filter ; flag } =
-    let filter_len = Bloom.filter_len filter in
-    let cs = CompactSize.to_cstruct_int cs filter_len in
+    let cs = CompactSize.to_cstruct_int cs filter.len in
     let filter_bytes = Bloom.to_filter filter in
-    Cstruct.blit_from_string filter_bytes 0 cs 0 filter_len ;
-    let cs = Cstruct.shift cs filter_len in
+    Cstruct.blit_from_string filter_bytes 0 cs 0 filter.len ;
+    let cs = Cstruct.shift cs filter.len in
     Cstruct.LE.set_uint32 cs 0 (Int32.of_int_exn filter.nb_funcs) ;
     let cs = Cstruct.shift cs 4 in
     Cstruct.LE.set_uint32 cs 0 filter.tweak ;
