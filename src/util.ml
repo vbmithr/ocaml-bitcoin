@@ -91,7 +91,10 @@ module Hash256 = struct
       else Hash s
 
     let empty = of_string (String.make 32 '\x00')
-    let of_hex h = of_string (Hex.to_string h)
+    let of_hex_internal h = of_string (Hex.to_string h)
+
+    let of_hex_rpc h =
+      Hex.to_string h |> String.rev |> of_string
 
     let to_cstruct cs (Hash s) =
       Cstruct.blit_from_string s 0 cs 0 32 ;

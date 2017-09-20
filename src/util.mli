@@ -36,7 +36,8 @@ module Hash256 : sig
   val hash : t -> int
 
   val empty : t
-  val of_hex : Hex.t -> t
+  val of_hex_internal : Hex.t -> t
+  val of_hex_rpc : Hex.t -> t
 
   val pp : Format.formatter -> t -> unit
   val show : t -> string

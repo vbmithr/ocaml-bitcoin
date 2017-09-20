@@ -13,6 +13,9 @@ let best_hh = ref Header.genesis_hash
 let buf = Cstruct.create 4096
 let network = ref Network.Mainnet
 
+let my_addresses =
+  Base58.Bitcoin.of_string_exn "mjVrE2kfz42sLR5gFcfvG6PwbAjhpmsKnn"
+
 let write_cstruct w (cs : Cstruct.t) =
   (* debug "write_cstruct %d %d" cs.off cs.len ; *)
   Writer.write_bigstring w cs.buffer ~pos:cs.off ~len:cs.len
@@ -28,10 +31,23 @@ let request_hdrs w start =
   write_cstruct2 w buf cs ;
   debug "Sent GetHeaders"
 
+let load_filter w data =
+  let filterload = FilterLoad.of_data data Update_none in
+  let msg = Message.FilterLoad filterload in
+  let cs = Message.to_cstruct ~network:!network buf msg in
+  write_cstruct2 w buf cs ;
+  debug "Sent FilterLoad"
+
+let get_data w invs =
+  let msg = Message.GetData invs in
+  let cs = Message.to_cstruct ~network:!network buf msg in
+  write_cstruct2 w buf cs ;
+  debug "Sent GetData"
+
 let process_error w header =
   sexp ~level:`Error (MessageHeader.sexp_of_t header)
 
-let process_msg w header msg =
+let process_msg w msg =
   (* sexp ~level:`Debug (Message.sexp_of_t msg) ; *)
   match msg with
   | Message.Version { version; services; timestamp; recv_services; recv_ipaddr; recv_port;
@@ -42,8 +58,12 @@ let process_msg w header msg =
     debug "Sent VerAck"
   | VerAck ->
     debug "Got VerAck!" ;
+    let data =
+      [Cstruct.of_string (Base58.Bitcoin.to_string my_addresses)] in
+    load_filter w data ;
+    get_data w [Inv.filteredblock (Hash256.of_hex_rpc (`Hex "00000000000007650b584bdba841c87876c9536953fe29ddd1a9107f0f25e486"))]
     (* Requesting headers *)
-    request_hdrs w Header.genesis_hash
+    (* request_hdrs w Header.genesis_hash *)
   | Reject rej ->
     error "%s" (Format.asprintf "%a" Reject.pp rej)
   | SendHeaders ->
@@ -124,7 +144,7 @@ let handle_chunk w buf ~pos ~len =
         process_error w h ;
         return (`Stop ())
       | Ok (_, msg), cs ->
-        process_msg w hdr msg ;
+        process_msg w msg ;
         return (`Consumed (msg_size, `Need_unknown))
 
 let main_loop port s r w =

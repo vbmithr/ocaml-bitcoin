@@ -228,6 +228,16 @@ module MessageHeader = struct
     size = 0 ; checksum = "" ;
   }
 
+  let filterload ~network = {
+    network ; msgname = FilterLoad ;
+    size = 0 ; checksum = ""
+  }
+
+  let getdata ~network = {
+    network ; msgname = GetData ;
+    size = 0 ; checksum = ""
+  }
+
   let of_cstruct cs =
     let open CS.MessageHeader in
     let network = get_t_start_string cs |> Network.of_cstruct in
@@ -384,16 +394,33 @@ module Inv = struct
     | 3l -> FilteredBlock
     | _ -> invalid_arg "Inv.id_of_int32"
 
+  let int32_of_id = function
+    | Tx -> 1l
+    | Block -> 2l
+    | FilteredBlock -> 3l
+
   type t = {
     id : id ;
     hash : Hash256.t ;
   } [@@deriving sexp]
+
+  let size = CS.Inv.sizeof_t
+
+  let tx hash = { id = Tx ; hash }
+  let block hash = { id = Block ; hash }
+  let filteredblock hash = { id = FilteredBlock ; hash }
 
   let of_cstruct cs =
     let open CS.Inv in
     let id = get_t_id cs |> id_of_int32 in
     let hash, _ = get_t_hash cs |> Hash256.of_cstruct in
     { id ; hash }, Cstruct.shift cs sizeof_t
+
+  let to_cstruct cs { id ; hash } =
+    let open CS.Inv in
+    set_t_id cs (int32_of_id id) ;
+    set_t_hash (Hash256.to_string hash) 0 cs ;
+    Cstruct.shift cs size
 end
 
 module PingPong = struct
@@ -425,9 +452,17 @@ module FeeFilter = struct
 end
 
 module FilterAdd = struct
+  type t = string
+
   let of_cstruct cs =
     let nb_bytes, cs = CompactSize.of_cstruct_int cs in
     Cstruct.(sub cs 0 nb_bytes |> to_string, shift cs nb_bytes)
+
+  let to_cstruct cs data =
+    let datalen = String.length data in
+    let cs = CompactSize.to_cstruct_int cs datalen in
+    Cstruct.blit_from_string data 0 cs 0 datalen ;
+    Cstruct.shift cs datalen
 end
 
 module FilterLoad = struct
@@ -443,20 +478,46 @@ module FilterLoad = struct
     | 2 -> Update_p2pkh_only
     | _ -> invalid_arg "FilterLoad.flag_of_int"
 
+  let int_of_flag = function
+    | Update_none -> 0
+    | Update_all -> 1
+    | Update_p2pkh_only -> 2
+
   type t = {
-    filter : string ;
-    nb_hash_funcs : int ;
-    tweak : Int32.t ;
+    filter : Bloom.t ;
     flag : flag ;
   } [@@deriving sexp]
+
+  let of_data
+      ?(false_pos_rate=0.0001)
+      ?(tweak=Random.int32 Int32.max_value)
+      elts
+      ?(nb_elts=List.length elts) flag =
+    let filter = Bloom.create nb_elts false_pos_rate tweak in
+    List.iter elts ~f:(Bloom.add filter) ;
+    { filter ; flag }
 
   let of_cstruct cs =
     let nb_bytes, cs = CompactSize.of_cstruct_int cs in
     let filter, cs = Cstruct.(sub cs 0 nb_bytes |> to_string, shift cs nb_bytes) in
-    let nb_hash_funcs = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int_exn in
+    let nb_funcs = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int_exn in
     let tweak = Cstruct.LE.get_uint32 cs 4 in
     let flag = Cstruct.get_uint8 cs 8 |> flag_of_int in
-    { filter ; nb_hash_funcs ; tweak ; flag }, Cstruct.shift cs 9
+    let filter = Bloom.of_filter filter nb_funcs tweak in
+    { filter ; flag }, Cstruct.shift cs 9
+
+  let to_cstruct cs { filter ; flag } =
+    let filter_len = Bloom.filter_len filter in
+    let cs = CompactSize.to_cstruct_int cs filter_len in
+    let filter_bytes = Bloom.to_filter filter in
+    Cstruct.blit_from_string filter_bytes 0 cs 0 filter_len ;
+    let cs = Cstruct.shift cs filter_len in
+    Cstruct.LE.set_uint32 cs 0 (Int32.of_int_exn filter.nb_funcs) ;
+    let cs = Cstruct.shift cs 4 in
+    Cstruct.LE.set_uint32 cs 0 filter.tweak ;
+    let cs = Cstruct.shift cs 4 in
+    Cstruct.set_uint8 cs 0 (int_of_flag flag) ;
+    Cstruct.shift cs 1
 end
 
 module Reject = struct
@@ -579,7 +640,7 @@ module Message = struct
     | Pong of Int64.t
 
     | GetBlocks of GetHashes.t
-    | GetData of GetHashes.t
+    | GetData of Inv.t list
     | GetHeaders of GetHashes.t
 
     | Block of Block.t
@@ -632,8 +693,8 @@ module Message = struct
           let objs, cs = GetHashes.of_cstruct payload in
           GetBlocks objs, cs
         | GetData ->
-          let objs, cs = GetHashes.of_cstruct payload in
-          GetData objs, cs
+          let invs, cs = ObjList.of_cstruct ~f:Inv.of_cstruct payload in
+          GetData invs, cs
         | GetHeaders ->
           let objs, cs = GetHashes.of_cstruct payload in
           GetHeaders objs, cs
@@ -700,6 +761,20 @@ module Message = struct
       let hdr = MessageHeader.getheaders ~network in
       let payload_cs = Cstruct.shift cs MessageHeader.size in
       let end_cs = GetHashes.to_cstruct payload_cs hashes in
+      let size, checksum = Chksum.compute' payload_cs end_cs in
+      let _ = MessageHeader.to_cstruct cs { hdr with size ; checksum } in
+      end_cs
+    | FilterLoad filterload ->
+      let hdr = MessageHeader.filterload ~network in
+      let payload_cs = Cstruct.shift cs MessageHeader.size in
+      let end_cs = FilterLoad.to_cstruct payload_cs filterload in
+      let size, checksum = Chksum.compute' payload_cs end_cs in
+      let _ = MessageHeader.to_cstruct cs { hdr with size ; checksum } in
+      end_cs
+    | GetData invs ->
+      let hdr = MessageHeader.getdata ~network in
+      let payload_cs = Cstruct.shift cs MessageHeader.size in
+      let end_cs = ObjList.to_cstruct payload_cs invs ~f:Inv.to_cstruct in
       let size, checksum = Chksum.compute' payload_cs end_cs in
       let _ = MessageHeader.to_cstruct cs { hdr with size ; checksum } in
       end_cs

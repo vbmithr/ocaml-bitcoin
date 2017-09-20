@@ -88,6 +88,10 @@ module Inv : sig
     id : id ;
     hash : Hash256.t ;
   } [@@deriving sexp]
+
+  val tx : Hash256.t -> t
+  val block : Hash256.t -> t
+  val filteredblock : Hash256.t -> t
 end
 
 module MerkleBlock : sig
@@ -106,11 +110,16 @@ module FilterLoad : sig
     | Update_p2pkh_only
 
   type t = {
-    filter : string ;
-    nb_hash_funcs : int ;
-    tweak : Int32.t ;
+    filter : Bloom.t ;
     flag : flag ;
   }
+
+  val of_data :
+    ?false_pos_rate:float ->
+    ?tweak:Int32.t ->
+    Cstruct.t list ->
+    ?nb_elts:int ->
+    flag -> t
 end
 
 module MessageName : sig
@@ -206,7 +215,7 @@ module Message : sig
     | Pong of Int64.t
 
     | GetBlocks of GetHashes.t
-    | GetData of GetHashes.t
+    | GetData of Inv.t list
     | GetHeaders of GetHashes.t
 
     | Block of Block.t
