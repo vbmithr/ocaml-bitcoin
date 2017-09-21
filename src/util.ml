@@ -77,7 +77,7 @@ end
 
 module Hash256 = struct
   module T = struct
-    type t = Hash of string [@@deriving sexp]
+    type t = Hash of string
 
     let hash (Hash s) = String.hash s
 
@@ -103,11 +103,17 @@ module Hash256 = struct
     let to_string (Hash s) = s
 
     let pp ppf (Hash s) =
-      let `Hex s_hex = Hex.of_string s in
+      let `Hex s_hex = Hex.of_string (String.rev s) in
       Format.fprintf ppf "%s" s_hex
 
     let show t =
       Format.asprintf "%a" pp t
+
+    let sexp_of_t t =
+      Sexplib.Std.sexp_of_string (show t)
+
+    let t_of_sexp sexp =
+      of_hex_rpc (`Hex (Sexplib.Std.string_of_sexp sexp))
 
     let of_cstruct cs =
       Hash (Cstruct.copy cs 0 32),

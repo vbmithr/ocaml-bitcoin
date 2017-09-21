@@ -100,7 +100,7 @@ module MerkleBlock : sig
     txn_count : int ;
     hashes : Hash256.t list ;
     flags : string ;
-  }
+  } [@@deriving sexp]
 end
 
 module FilterLoad : sig

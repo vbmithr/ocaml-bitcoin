@@ -58,8 +58,7 @@ let process_msg w msg =
     debug "Sent VerAck"
   | VerAck ->
     debug "Got VerAck!" ;
-    let data =
-      [Cstruct.of_string (Base58.Bitcoin.to_string my_addresses)] in
+    let data = [Cstruct.of_string my_addresses.payload] in
     load_filter w data ;
     get_data w [Inv.filteredblock (Hash256.of_hex_rpc (`Hex "00000000000007650b584bdba841c87876c9536953fe29ddd1a9107f0f25e486"))]
     (* Requesting headers *)
@@ -97,8 +96,8 @@ let process_msg w msg =
     debug "Got GetHeaders!"
   | Block _ ->
     debug "Got Block!"
-  | MerkleBlock _ ->
-    debug "Got MerkleBlock!"
+  | MerkleBlock mblock ->
+    debug "MerkleBlock %s" (Sexplib.Sexp.to_string_hum (MerkleBlock.sexp_of_t mblock))
   | Headers hdrs ->
     List.iteri hdrs ~f:begin fun i h ->
       let hh = Header.hash256 h in
@@ -111,14 +110,15 @@ let process_msg w msg =
       request_hdrs w !best_hh
   | Inv invs ->
     List.iter invs ~f:begin fun inv ->
-      sexp ~level:`Debug (Inv.sexp_of_t inv)
+      debug "Inv %s" (Sexplib.Sexp.to_string_hum (Inv.sexp_of_t inv))
     end
   | NotFound _ ->
     debug "Got NotFound!"
   | MemPool ->
     debug "Got MemPool!"
-  | Tx _ ->
+  | Tx tx ->
     debug "Got Tx!"
+    (* debug "%s" (Sexplib.Sexp.to_string_hum (Transaction.sexp_of_t tx)) *)
   | FeeFilter fee ->
     debug "Got FeeFilter: %Ld" fee
   | FilterAdd _ ->

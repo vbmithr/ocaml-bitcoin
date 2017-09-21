@@ -313,7 +313,7 @@ module Version = struct
       ?(nonce=Int64.of_int (Random.bits ()))
       ?(user_agent="/OCamlBitcoin:0.1/")
       ?(start_height=0)
-      ?(relay=true)
+      ?(relay=false)
       () =
     { version ; services ; timestamp ; recv_services ;
       recv_ipaddr ; recv_port ; trans_services ; trans_ipaddr ;

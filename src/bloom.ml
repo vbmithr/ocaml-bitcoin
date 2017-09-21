@@ -120,6 +120,7 @@ let _ =
   let bloom = create 1 0.0001 0l in
   add bloom data ;
   let filter = to_filter bloom in
+  let filter2 = of_filter filter bloom.nb_funcs bloom.tweak in
   let `Hex msg = Hex.of_string filter in
   Caml.Printf.printf "%s\n%!" msg ;
-  failwith msg
+  assert Caml.Pervasives.(filter2 = bloom)
