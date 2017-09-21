@@ -99,7 +99,7 @@ module MerkleBlock : sig
     header : Header.t ;
     txn_count : int ;
     hashes : Hash256.t list ;
-    flags : string ;
+    flags : Bitv.t ;
   } [@@deriving sexp]
 end
 

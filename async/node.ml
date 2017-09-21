@@ -59,8 +59,8 @@ let process_msg w msg =
   | VerAck ->
     debug "Got VerAck!" ;
     let data = [Cstruct.of_string my_addresses.payload] in
-    load_filter w data ;
-    get_data w [Inv.filteredblock (Hash256.of_hex_rpc (`Hex "00000000000007650b584bdba841c87876c9536953fe29ddd1a9107f0f25e486"))]
+    load_filter w data
+    (* get_data w [Inv.filteredblock (Hash256.of_hex_rpc (`Hex "00000000000007650b584bdba841c87876c9536953fe29ddd1a9107f0f25e486"))] *)
     (* Requesting headers *)
     (* request_hdrs w Header.genesis_hash *)
   | Reject rej ->

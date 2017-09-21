@@ -1,47 +1,10 @@
 open Base
 open Murmur3.Murmur_cstruct
+open Util
 
 let bytes_max = 36000
 let funcs_max = 50
 let seed_mult = 0xfba4c795l
-
-module Bitv = struct
-  open Sexplib.Std
-  include Bitv
-
-  let t_of_sexp sexp =
-    string_of_sexp sexp |>
-    Bitv.L.of_string
-
-  let sexp_of_t t =
-    Bitv.L.to_string t |>
-    sexp_of_string
-
-  let to_string_le bitv =
-    let nb_bytes = Bitv.length bitv / 8 in
-    let s = String.create nb_bytes in
-    let v = ref 0 in
-    for i = 0 to nb_bytes - 1 do
-      v := 0 ;
-      for j = 0 to 7 do
-        if Bitv.get bitv (8 * i + j) then
-          v := !v lor (1 lsl j)
-      done ;
-      EndianString.BigEndian.set_int8 s i !v
-    done ;
-    s
-
-  let of_string_le s =
-    let len = String.length s in
-    let bitv = Bitv.create (len * 8) false in
-    for i = 0 to len - 1 do
-      let v = EndianString.BigEndian.get_int8 s i in
-      for j = 0 to 7 do
-        if v land (1 lsl j) <> 0 then Bitv.set bitv (8 * i + j) true
-      done
-    done ;
-    bitv
-end
 
 type t = {
   filter : Bitv.t ;

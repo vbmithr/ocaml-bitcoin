@@ -92,3 +92,13 @@ module ObjList : sig
   val to_cstruct :
     Cstruct.t -> 'a list -> f:(Cstruct.t -> 'a -> Cstruct.t) -> Cstruct.t
 end
+
+module Bitv : sig
+  include module type of Bitv with type t = Bitv.t
+
+  val t_of_sexp : Sexplib.Sexp.t -> t
+  val sexp_of_t : t -> Sexplib.Sexp.t
+
+  val to_string_le : t -> string
+  val of_string_le : string -> t
+end

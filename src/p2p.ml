@@ -433,7 +433,7 @@ module MerkleBlock = struct
     header : Header.t ;
     txn_count : int ;
     hashes : Hash256.t list ;
-    flags : string ;
+    flags : Bitv.t ;
   } [@@deriving sexp]
 
   let of_cstruct cs =
@@ -442,7 +442,7 @@ module MerkleBlock = struct
     let cs = Cstruct.shift cs 4 in
     let hashes, cs  = GetHashes.of_cstruct_only_hashes cs in
     let flags_len, cs = CompactSize.of_cstruct_int cs in
-    let flags = Cstruct.(sub cs 0 flags_len |> to_string) in
+    let flags = Cstruct.(sub cs 0 flags_len |> to_string |> Bitv.of_string_le) in
     { header ; txn_count ; hashes ; flags }, Cstruct.shift cs flags_len
 end
 
