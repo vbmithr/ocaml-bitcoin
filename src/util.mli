@@ -45,6 +45,7 @@ module Hash256 : sig
   val compute_bigarray : Cstruct.buffer -> t
   val compute_cstruct : Cstruct.t -> t
   val compute_string : string -> t
+  val compute_concat : t -> t -> t
 
   val of_string : string -> t
   val of_cstruct : Cstruct.t -> t * Cstruct.t
@@ -101,4 +102,6 @@ module Bitv : sig
 
   val to_string_le : t -> string
   val of_string_le : string -> t
+
+  val to_bool_list : t -> bool list
 end

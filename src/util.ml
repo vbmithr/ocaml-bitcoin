@@ -127,6 +127,9 @@ module Hash256 = struct
 
     let compute_string data =
       Hash (Digestif.((SHA256.Bytes.(digest (digest data)))))
+
+    let compute_concat (Hash h1) (Hash h2) =
+      compute_string (h1 ^ h2)
   end
   include T
   include Comparable.Make(T)
@@ -302,4 +305,7 @@ module Bitv = struct
       done
     done ;
     bitv
+
+  let to_bool_list bv =
+    Bitv.fold_right (fun v acc -> v :: acc) bv []
 end
