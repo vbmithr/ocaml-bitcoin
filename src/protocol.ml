@@ -86,11 +86,11 @@ module Outpoint = struct
     let i = get_t_index cs |> Int32.to_int_exn in
     { hash ; i }, Cstruct.shift cs sizeof_t
 
-  let to_cstruct cs { hash ; i } =
+  let to_cstruct cs { hash = Hash payload ; i } =
     let open CS.Outpoint in
-    let cs = Hash256.to_cstruct cs hash in
+    set_t_hash payload 0 cs ;
     set_t_index cs (Int32.of_int_exn i) ;
-    Cstruct.shift cs 4
+    Cstruct.shift cs size
 end
 
 module TxIn = struct

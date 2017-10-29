@@ -116,6 +116,9 @@ module Opcode : sig
     | Op_nop8
     | Op_nop9
     | Op_nop10
+
+  val of_int : int -> t
+  val to_int : t -> int
 end
 
 module Element : sig

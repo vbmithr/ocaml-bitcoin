@@ -140,7 +140,7 @@ module Opcode = struct
     | Op_13 -> 93
     | Op_14 -> 94
     | Op_15 -> 95
-    | Op_16 -> 86
+    | Op_16 -> 96
     | Op_nop -> 97
     | Op_if -> 99
     | Op_notif -> 100
@@ -208,7 +208,7 @@ module Opcode = struct
     | Op_ripemd160 -> 166
     | Op_sha1 -> 167
     | Op_sha256 -> 168
-    | Op_hash160 -> 168
+    | Op_hash160 -> 169
     | Op_hash256 -> 170
     | Op_codeseparator -> 171
     | Op_checksig -> 172
@@ -370,8 +370,8 @@ module Element = struct
     | O opcode ->
       Opcode.to_cstruct cs opcode
     | D buf ->
-      Cstruct.blit buf buf.off cs 0 buf.len ;
-      Cstruct.shift cs buf.len
+      Cstruct.(blit buf 0 cs 0 (len buf)) ;
+      Cstruct.(shift cs (len buf))
 
   let length = function
     | O _ -> 1

@@ -78,6 +78,7 @@ module Transaction : sig
   } [@@deriving sexp]
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
 
   val size : t -> int
   val hash256 : t -> Hash256.t
