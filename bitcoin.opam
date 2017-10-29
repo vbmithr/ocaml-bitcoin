@@ -12,8 +12,13 @@ available: [
 build: [ "jbuilder" "build" "-j" jobs "-p" name "@install" ]
 depends: [
   "jbuilder" {build & >= "1.0+beta11"}
+  "base" {>= "v0.9.3"}
+  "stdint" {>= "0.5.0"}
   "ipaddr" {>= "2.8.0"}
   "ptime" {>= "0.8.3"}
   "cstruct" {>= "3.1.1"}
   "digestif" {>= "0.3"}
+  "hex" {>= "1.1.1"}
+  "bitv" {>= "1.2"}
+  "murmur3" {>= "1.0"}
 ]
