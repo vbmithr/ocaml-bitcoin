@@ -309,3 +309,34 @@ module Bitv = struct
   let to_bool_list bv =
     Bitv.fold_right (fun v acc -> v :: acc) bv []
 end
+
+module KeyPath = struct
+  type derivation = N of Int32.t | H of Int32.t
+  type t = derivation list
+
+  let of_string s =
+    let derivations = String.split ~on:'/' s in
+    List.map derivations ~f:begin fun d ->
+      match String.(get d (length d - 1)) with
+      | '\'' -> H (Int32.of_string String.(sub d 0 (length d - 1)))
+      | _ -> N (Int32.of_string d)
+    end
+
+  let write buf pos t =
+    let open EndianBytes in
+    let len =
+      List.fold_left t ~init:0 ~f:begin fun i -> function
+        | N v -> NativeEndian.set_int32 buf (pos+i*4) v; i+1
+        | H v -> NativeEndian.set_int32 buf (pos+i*4) Int32.(v land 0x80000000l); i+1
+      end in
+    pos + len * 4
+
+  let write_bigstring buf pos t =
+    let open EndianBigstring in
+    let len =
+      List.fold_left t ~init:0 ~f:begin fun i -> function
+        | N v -> NativeEndian.set_int32 buf (pos+i*4) v; i+1
+        | H v -> NativeEndian.set_int32 buf (pos+i*4) Int32.(v land 0x80000000l); i+1
+      end in
+    pos + len * 4
+end

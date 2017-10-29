@@ -105,3 +105,13 @@ module Bitv : sig
 
   val to_bool_list : t -> bool list
 end
+
+module KeyPath : sig
+  type derivation = N of Int32.t | H of Int32.t
+  type t = derivation list
+
+  val of_string : string -> t
+
+  val write : Caml.Bytes.t -> int -> t -> int
+  val write_bigstring : Cstruct.buffer -> int -> t -> int
+end
