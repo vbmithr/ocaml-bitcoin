@@ -322,21 +322,21 @@ module KeyPath = struct
       | _ -> N (Int32.of_string d)
     end
 
-  let write buf pos t =
-    let open EndianBytes in
+  let write_be buf pos t =
+    let open EndianBytes.BigEndian in
     let len =
       List.fold_left t ~init:0 ~f:begin fun i -> function
-        | N v -> NativeEndian.set_int32 buf (pos+i*4) v; i+1
-        | H v -> NativeEndian.set_int32 buf (pos+i*4) Int32.(v land 0x80000000l); i+1
+        | N v -> set_int32 buf (pos+i*4) v; i+1
+        | H v -> set_int32 buf (pos+i*4) Int32.(v lor 0x80000000l); i+1
       end in
     pos + len * 4
 
-  let write_bigstring buf pos t =
-    let open EndianBigstring in
+  let write_be_bigstring buf pos t =
+    let open EndianBigstring.BigEndian in
     let len =
       List.fold_left t ~init:0 ~f:begin fun i -> function
-        | N v -> NativeEndian.set_int32 buf (pos+i*4) v; i+1
-        | H v -> NativeEndian.set_int32 buf (pos+i*4) Int32.(v land 0x80000000l); i+1
+        | N v -> set_int32 buf (pos+i*4) v; i+1
+        | H v -> set_int32 buf (pos+i*4) Int32.(v lor 0x80000000l); i+1
       end in
     pos + len * 4
 end
