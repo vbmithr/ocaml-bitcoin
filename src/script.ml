@@ -766,7 +766,7 @@ module Run = struct
         invalid_arg "Run.eval: op_within without at least 3 stack elements"
       | O Op_ripemd160 :: rest, v :: stack ->
         let digest =
-          Cstruct.(of_bigarray Digestif.(RIPEMD160.Bigstring.digest (to_bigarray v))) in
+          Cstruct.(of_bigarray Digestif.(RMD160.Bigstring.digest (to_bigarray v))) in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_ripemd160 :: _, _ ->
         invalid_arg "Run.eval: op_ripemd160 without a top stack element"
@@ -784,7 +784,7 @@ module Run = struct
         invalid_arg "Run.eval: op_sha256 without a top stack element"
       | O Op_hash160 :: rest, v :: stack ->
         let digest =
-          Cstruct.(of_bigarray Digestif.(RIPEMD160.Bigstring.digest
+          Cstruct.(of_bigarray Digestif.(RMD160.Bigstring.digest
                                            (SHA256.Bigstring.digest (to_bigarray v)))) in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_hash160 :: _, _ ->
