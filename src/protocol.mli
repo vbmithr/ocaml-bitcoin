@@ -63,6 +63,8 @@ module TxOut : sig
   }
 
   val size : t -> int
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
 end
 
 module Transaction : sig
@@ -70,6 +72,9 @@ module Transaction : sig
     type t =
       | Timestamp of Timestamp.t
       | Block of int
+
+    val of_cstruct : Cstruct.t -> t * Cstruct.t
+    val to_cstruct : Cstruct.t -> t -> Cstruct.t
   end
 
   type t = {
