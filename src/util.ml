@@ -331,12 +331,12 @@ module KeyPath = struct
       end in
     pos + len * 4
 
-  let write_be_bigstring buf pos t =
-    let open EndianBigstring.BigEndian in
+  let write_be_cstruct cs t =
+    let open Cstruct in
     let len =
       List.fold_left t ~init:0 ~f:begin fun i -> function
-        | N v -> set_int32 buf (pos+i*4) v; i+1
-        | H v -> set_int32 buf (pos+i*4) Int32.(v lor 0x80000000l); i+1
+        | N v -> BE.set_uint32 cs (i*4) v; i+1
+        | H v -> BE.set_uint32 cs (i*4) Int32.(v lor 0x80000000l); i+1
       end in
-    pos + len * 4
+    Cstruct.shift cs (len * 4)
 end

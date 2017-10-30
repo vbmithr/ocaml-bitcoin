@@ -113,5 +113,5 @@ module KeyPath : sig
   val of_string : string -> t
 
   val write_be : Caml.Bytes.t -> int -> t -> int
-  val write_be_bigstring : Cstruct.buffer -> int -> t -> int
+  val write_be_cstruct : Cstruct.t -> t -> Cstruct.t
 end
