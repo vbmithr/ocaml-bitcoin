@@ -72,8 +72,8 @@ module Transaction : sig
 
   type t = {
     version : int ;
-    tx_in : TxIn.t list ;
-    tx_out : TxOut.t list ;
+    inputs : TxIn.t list ;
+    outputs : TxOut.t list ;
     lock_time : LockTime.t ;
   } [@@deriving sexp]
 

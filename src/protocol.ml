@@ -163,27 +163,27 @@ module Transaction = struct
 
   type t = {
     version : int ;
-    tx_in : TxIn.t list ;
-    tx_out : TxOut.t list ;
+    inputs : TxIn.t list ;
+    outputs : TxOut.t list ;
     lock_time : LockTime.t ;
   } [@@deriving sexp]
 
-  let size { tx_in ; tx_out } =
-    8 + ObjList.(size tx_in ~f:TxIn.size + size tx_out ~f:TxOut.size)
+  let size { inputs ; outputs } =
+    8 + ObjList.(size inputs ~f:TxIn.size + size outputs ~f:TxOut.size)
 
   let of_cstruct cs =
     let version = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int_exn in
     let cs = Cstruct.shift cs 4 in
-    let tx_in, cs = ObjList.of_cstruct ~f:TxIn.of_cstruct cs in
-    let tx_out, cs = ObjList.of_cstruct ~f:TxOut.of_cstruct cs in
+    let inputs, cs = ObjList.of_cstruct ~f:TxIn.of_cstruct cs in
+    let outputs, cs = ObjList.of_cstruct ~f:TxOut.of_cstruct cs in
     let lock_time, cs = LockTime.of_cstruct cs in
-    { version ; tx_in ; tx_out ; lock_time }, cs
+    { version ; inputs ; outputs ; lock_time }, cs
 
-  let to_cstruct cs { version ; tx_in ; tx_out ; lock_time } =
+  let to_cstruct cs { version ; inputs ; outputs ; lock_time } =
     Cstruct.LE.set_uint32 cs 0 (Int32.of_int_exn version) ;
     let cs = Cstruct.shift cs 4 in
-    let cs = ObjList.to_cstruct cs tx_in ~f:TxIn.to_cstruct in
-    let cs = ObjList.to_cstruct cs tx_out ~f:TxOut.to_cstruct in
+    let cs = ObjList.to_cstruct cs inputs ~f:TxIn.to_cstruct in
+    let cs = ObjList.to_cstruct cs outputs ~f:TxOut.to_cstruct in
     LockTime.to_cstruct cs lock_time
 
   let hash256 t =
