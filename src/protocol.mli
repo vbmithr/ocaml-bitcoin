@@ -52,6 +52,8 @@ module TxIn : sig
   }
 
   val size : t -> int
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
 end
 
 module TxOut : sig
