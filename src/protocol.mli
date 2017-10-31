@@ -73,6 +73,8 @@ module Transaction : sig
       | Timestamp of Timestamp.t
       | Block of int
 
+    val to_int32 : t -> Int32.t
+
     val of_cstruct : Cstruct.t -> t * Cstruct.t
     val to_cstruct : Cstruct.t -> t -> Cstruct.t
   end
