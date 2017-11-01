@@ -75,30 +75,29 @@ module Timestamp = struct
   include Ptime_clock
 end
 
-module Hash256 = struct
+module Hash (H1 : Digestif.S) (H2 : Digestif.S) = struct
   module T = struct
     type t = Hash of string
 
     let hash (Hash s) = String.hash s
-
     let compare (Hash a) (Hash b) = String.compare a b
 
-    (* include (val Comparator.make ~compare ~sexp_of_t) *)
+    let length = H2.digest_size
 
     let of_string s =
-      if String.length s <> 32 then
+      if String.length s <> length then
         invalid_arg "Hash.of_string"
       else Hash s
 
-    let empty = of_string (String.make 32 '\x00')
+    let empty = of_string (String.make length '\x00')
     let of_hex_internal h = of_string (Hex.to_string h)
 
     let of_hex_rpc h =
       Hex.to_string h |> String.rev |> of_string
 
     let to_cstruct cs (Hash s) =
-      Cstruct.blit_from_string s 0 cs 0 32 ;
-      Cstruct.shift cs 32
+      Cstruct.blit_from_string s 0 cs 0 length ;
+      Cstruct.shift cs length
 
     let to_string (Hash s) = s
 
@@ -116,17 +115,17 @@ module Hash256 = struct
       of_hex_rpc (`Hex (Sexplib.Std.string_of_sexp sexp))
 
     let of_cstruct cs =
-      Hash (Cstruct.copy cs 0 32),
-      Cstruct.shift cs 32
+      Hash (Cstruct.copy cs 0 length),
+      Cstruct.shift cs length
 
     let compute_bigarray data =
-      Hash (Digestif.(Bi.to_string (SHA256.Bigstring.(digest (digest data)))))
+      Hash (Digestif.(Bi.to_string (H2.Bigstring.digest (H1.Bigstring.digest data))))
 
     let compute_cstruct cs =
       compute_bigarray (Cstruct.to_bigarray cs)
 
     let compute_string data =
-      Hash (Digestif.((SHA256.Bytes.(digest (digest data)))))
+      Hash (H2.Bytes.digest (H1.Bytes.digest data))
 
     let compute_concat (Hash h1) (Hash h2) =
       compute_string (h1 ^ h2)
@@ -134,6 +133,33 @@ module Hash256 = struct
   include T
   include Comparable.Make(T)
 end
+
+module type HASH = sig
+  type t = private Hash of string [@@deriving sexp]
+  include Comparable.S with type t := t
+  val hash : t -> int
+
+  val empty : t
+  val of_hex_internal : Hex.t -> t
+  val of_hex_rpc : Hex.t -> t
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
+
+  val compute_bigarray : Cstruct.buffer -> t
+  val compute_cstruct : Cstruct.t -> t
+  val compute_string : string -> t
+  val compute_concat : t -> t -> t
+
+  val of_string : string -> t
+  val of_cstruct : Cstruct.t -> t * Cstruct.t
+
+  val to_string : t -> string
+  val to_cstruct : Cstruct.t -> t -> Cstruct.t
+end
+
+module Hash160 : HASH = Hash (Digestif.RMD160) (Digestif.SHA256)
+module Hash256 : HASH = Hash (Digestif.SHA256) (Digestif.SHA256)
 
 module Chksum = struct
   let compute cs =

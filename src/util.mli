@@ -30,7 +30,7 @@ module Timestamp : sig
   val now : unit -> t
 end
 
-module Hash256 : sig
+module type HASH = sig
   type t = private Hash of string [@@deriving sexp]
   include Comparable.S with type t := t
   val hash : t -> int
@@ -53,6 +53,9 @@ module Hash256 : sig
   val to_string : t -> string
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
 end
+
+module Hash160 : HASH
+module Hash256 : HASH
 
 module Chksum : sig
   val compute : Cstruct.t -> string
