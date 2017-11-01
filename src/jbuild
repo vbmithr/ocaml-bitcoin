@@ -2,5 +2,18 @@
  ((name bitcoin)
   (public_name bitcoin)
   (preprocess (pps (ppx_sexp_conv)))
-  (modules (util p2p protocol script bloom merkle))
-  (libraries (bitcoin_cstruct base stdint ipaddr ptime ptime.clock.os cstruct digestif.c hex bitv murmur3))))
+  (modules (util p2p protocol script bloom merkle wallet))
+  (libraries (bitcoin_cstruct
+              base
+              stdint
+              ipaddr
+              ptime
+              ptime.clock.os
+              cstruct
+              digestif.c
+              hex
+              bitv
+              murmur3
+              secp256k1
+              sodium
+              base58))))
