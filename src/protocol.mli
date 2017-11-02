@@ -83,6 +83,9 @@ module Transaction : sig
       | Timestamp of Timestamp.t
       | Block of int
 
+    val timestamp : Timestamp.t -> t
+    val block : int -> t
+
     val to_int32 : t -> Int32.t
 
     val of_cstruct : Cstruct.t -> t * Cstruct.t
@@ -95,6 +98,10 @@ module Transaction : sig
     outputs : TxOut.t list ;
     lock_time : LockTime.t ;
   } [@@deriving sexp]
+
+  val create :
+    ?version:int -> ?lock_time:LockTime.t ->
+    inputs:TxIn.t list -> outputs:TxOut.t list -> unit -> t
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t

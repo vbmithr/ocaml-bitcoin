@@ -163,6 +163,9 @@ module Transaction = struct
       | Block of int
     [@@deriving sexp]
 
+    let timestamp ts = Timestamp ts
+    let block height = Block height
+
     let of_int32 i =
       if Int32.(i < 500_000_000l)
       then Block (Int32.to_int_exn i)
@@ -186,6 +189,9 @@ module Transaction = struct
     outputs : TxOut.t list ;
     lock_time : LockTime.t ;
   } [@@deriving sexp]
+
+  let create ?(version=1) ?(lock_time=LockTime.block 0) ~inputs ~outputs () =
+    { version ; inputs ; outputs ; lock_time }
 
   let size { inputs ; outputs } =
     8 + ObjList.(size inputs ~f:TxIn.size + size outputs ~f:TxOut.size)
