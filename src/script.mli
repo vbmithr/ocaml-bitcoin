@@ -131,7 +131,7 @@ type t = Element.t list [@@deriving sexp]
 
 val size : t -> int
 
-val of_cstruct : Cstruct.t -> t * Cstruct.t
+val of_cstruct : Cstruct.t -> int -> t * Cstruct.t
 val to_cstruct : Cstruct.t -> Element.t list -> Cstruct.t
 
 module Run : sig

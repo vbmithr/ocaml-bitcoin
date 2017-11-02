@@ -187,6 +187,10 @@ module CompactSize = struct
     | Int32 of Int32.t
     | Int64 of Int64.t
 
+  let of_int i = Int i
+  let of_int32 i = Int32 i
+  let of_int64 i = Int64 i
+
   let size = function
     | Int n when n < 0xFD -> 1
     | Int n when n < 0x10000 -> 3

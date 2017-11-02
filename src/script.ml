@@ -381,11 +381,7 @@ end
 type t = Element.t list [@@deriving sexp]
 
 let size elts =
-  let size =
-    Base.List.fold_left elts ~init:0 ~f:begin fun acc e ->
-      acc + Element.length e
-    end in
-  CompactSize.size (Int size) + size
+  Base.List.fold_left elts ~init:0 ~f:(fun acc e -> acc + Element.length e)
 
 let read_all cs =
   let open Element in
@@ -416,21 +412,11 @@ let read_all cs =
   in
   inner [] 0 cs
 
-let of_cstruct cs =
-  let len, cs = CompactSize.of_cstruct_int cs in
-  read_all (Cstruct.sub cs 0 len),
-  Cstruct.shift cs len
+let of_cstruct cs len =
+  read_all (Cstruct.sub cs 0 len), Cstruct.shift cs len
 
 let to_cstruct cs elts =
-  let open Element in
-  let len = Base.List.fold_left elts ~init:0 ~f:begin fun a -> function
-      | O _ -> Caml.succ a
-      | D cs -> a + cs.len
-    end in
-  let cs = CompactSize.to_cstruct_int cs len in
-  Base.List.fold_left elts ~init:cs ~f:begin fun cs elt ->
-    Element.to_cstruct cs elt
-  end
+  Base.List.fold_left elts ~init:cs ~f:Element.to_cstruct
 
 module Stack = struct
   open Stdint

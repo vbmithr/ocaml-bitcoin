@@ -74,6 +74,10 @@ module CompactSize : sig
     | Int32 of Int32.t
     | Int64 of Int64.t
 
+  val of_int : int -> t
+  val of_int32 : Int32.t -> t
+  val of_int64 : Int64.t -> t
+
   val size : t -> int
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
