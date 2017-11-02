@@ -75,7 +75,7 @@ module Timestamp = struct
   include Ptime_clock
 end
 
-module Hash (H1 : Digestif.S) (H2 : Digestif.S) = struct
+module Hash (H2 : Digestif.S) (H1 : Digestif.S) = struct
   module T = struct
     type t = Hash of string
 
@@ -86,7 +86,7 @@ module Hash (H1 : Digestif.S) (H2 : Digestif.S) = struct
 
     let of_string s =
       if String.length s <> length then
-        invalid_arg "Hash.of_string"
+        invalid_arg (Printf.sprintf "Hash.of_string: length must be %d" length)
       else Hash s
 
     let empty = of_string (String.make length '\x00')
@@ -138,6 +138,7 @@ module type HASH = sig
   type t = private Hash of string [@@deriving sexp]
   include Comparable.S with type t := t
   val hash : t -> int
+  val length : int
 
   val empty : t
   val of_hex_internal : Hex.t -> t

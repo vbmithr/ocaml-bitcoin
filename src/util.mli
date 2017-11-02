@@ -34,6 +34,7 @@ module type HASH = sig
   type t = private Hash of string [@@deriving sexp]
   include Comparable.S with type t := t
   val hash : t -> int
+  val length : int
 
   val empty : t
   val of_hex_internal : Hex.t -> t

@@ -1,14 +1,20 @@
 open Bitcoin
 
+let assert_equal a b = assert (a = b)
+
 module Util = struct
   open Util
   let test_keyPath_of_string () =
     let kp = KeyPath.of_string "44'/1'/0'/0/0" in
-    assert (kp = [H 44l; H 1l; H 0l; N 0l; N 0l])
+    assert_equal kp [H 44l; H 1l; H 0l; N 0l; N 0l]
+
+  let verify_size () =
+    assert_equal (String.length (Hash160.(compute_string "" |> to_string))) Hash160.length
 
   let runtest = [
-      "KeyPath.of_string", `Quick, test_keyPath_of_string ;
-    ]
+    "KeyPath.of_string", `Quick, test_keyPath_of_string ;
+    "Hash160.{of_string,to_string}", `Quick, verify_size ;
+  ]
 end
 
 let rawTx = `Hex "0100000002ba0eb35fa910ccd759ff46b5233663e96017e8dfaedd315407dc5be45d8c260f000000001976a9146ce472b3cfced15a7d50b6b0cd75a3b042554e8e88acfdffffff69c84956a9cc0ec5986091e1ab229e1a7ea6f4813beb367c01c8ccc708e160cc000000001976a9146ce472b3cfced15a7d50b6b0cd75a3b042554e8e88acfdffffff01a17c0100000000001976a914efd0919fc05311850a8382b9c7e80abcd347343288ac00000000"
