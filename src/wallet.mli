@@ -23,4 +23,6 @@ module Address : sig
   val of_pubkey :
     ?testnet:bool -> ?compress:bool ->
     Secp256k1.Context.t -> Secp256k1.Public.t -> Base58.Bitcoin.t
+  val of_script : ?testnet:bool -> Script.t -> Base58.Bitcoin.t
+  val to_script : Base58.Bitcoin.t -> Script.t
 end

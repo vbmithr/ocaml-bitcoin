@@ -42,10 +42,35 @@ module Address = struct
   let of_wif ctx { WIF.privkey ; testnet ; compress } =
     let open Secp256k1 in
     let pk = Public.of_secret ctx privkey in
-    Public.to_bytes ~compress ctx pk |> Cstruct.of_bigarray |> Cstruct.to_string |>
-    Base58.Bitcoin.create ~version:(if testnet then P2PKH else Testnet_P2PKH)
+    let pk = Public.to_bytes ~compress ctx pk |> Cstruct.of_bigarray in
+    let hash160, _ = Util.Hash160.of_cstruct pk in
+    Base58.Bitcoin.create
+      ~version:(if testnet then Testnet_P2PKH else P2PKH) (Util.Hash160.to_string hash160)
 
   let of_pubkey ?(testnet=false) ?(compress=true) ctx pk =
-    Secp256k1.Public.to_bytes ~compress ctx pk |> Cstruct.of_bigarray |> Cstruct.to_string |>
-    Base58.Bitcoin.create ~version:(if testnet then P2PKH else Testnet_P2PKH)
+    let pk = Secp256k1.Public.to_bytes ~compress ctx pk |> Cstruct.of_bigarray in
+    let hash160, _ = Util.Hash160.of_cstruct pk in
+    Base58.Bitcoin.create
+      ~version:(if testnet then Testnet_P2PKH else P2PKH) (Util.Hash160.to_string hash160)
+
+  let max_serialized_script_size = 520
+
+  let of_script ?(testnet=false) script =
+    let cs = Cstruct.create max_serialized_script_size in
+    let cs' = Script.to_cstruct cs script in
+    let hash160, _ = Util.Hash160.of_cstruct (Cstruct.sub cs 0 cs'.off) in
+    Base58.Bitcoin.create
+      ~version:(if testnet then Testnet_P2SH else P2SH) (Util.Hash160.to_string hash160)
+
+  let to_script { Base58.Bitcoin.version ; payload } =
+    match version with
+    | P2PKH | Testnet_P2PKH ->
+      Script.Element.[O Op_dup ; O Op_hash160 ;
+                      O (Op_pushdata 20) ; D (Cstruct.of_string payload) ;
+                      O Op_equalverify ; O Op_checksig ]
+    | P2SH | Testnet_P2SH ->
+      Script.Element.[ O Op_hash160 ;
+                       O (Op_pushdata 20) ; D (Cstruct.of_string payload) ;
+                       O Op_equalverify ]
+    | _ -> invalid_arg "Address.to_script: unsupported address format"
 end
