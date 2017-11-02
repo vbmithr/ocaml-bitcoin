@@ -342,15 +342,28 @@ end
 
 module KeyPath = struct
   type derivation = N of Int32.t | H of Int32.t
+
+  let derivation_of_string d =
+    match String.(get d (length d - 1)) with
+    | '\'' -> H (Int32.of_string String.(sub d 0 (length d - 1)))
+    | _ -> N (Int32.of_string d)
+
+  let string_of_derivation = function
+    | N i -> Int32.to_string i
+    | H i -> Int32.to_string i ^ "'"
+
   type t = derivation list
 
   let of_string s =
     let derivations = String.split ~on:'/' s in
-    List.map derivations ~f:begin fun d ->
-      match String.(get d (length d - 1)) with
-      | '\'' -> H (Int32.of_string String.(sub d 0 (length d - 1)))
-      | _ -> N (Int32.of_string d)
-    end
+    List.map derivations ~f:derivation_of_string
+
+  let to_string t =
+    List.map t ~f:string_of_derivation |>
+    String.concat ~sep:"/"
+
+  let pp ppf t =
+    Format.pp_print_string ppf (to_string t)
 
   let write_be buf pos t =
     let open EndianBytes.BigEndian in
@@ -369,4 +382,86 @@ module KeyPath = struct
         | H v -> BE.set_uint32 cs (i*4) Int32.(v lor 0x80000000l); i+1
       end in
     Cstruct.shift cs (len * 4)
+end
+
+module Bip44 = struct
+  module CoinType = struct
+    type t =
+      | Bitcoin
+      | Bitcoin_testnet
+
+    let to_int32 = function
+      | Bitcoin -> 0l
+      | Bitcoin_testnet -> 1l
+
+    let of_int32 = function
+      | 0l -> Bitcoin
+      | 1l -> Bitcoin_testnet
+      | _ -> invalid_arg "Bip44.CoinType.of_int"
+
+    let pp ppf ct =
+      Int32.pp ppf (to_int32 ct)
+  end
+
+  module Chain = struct
+    type t =
+      | External
+      | Internal
+
+    let to_int32 = function
+      | External -> 0l
+      | Internal -> 1l
+
+    let of_int32 = function
+      | 0l -> External
+      | 1l -> Internal
+      | _ -> invalid_arg "Bip44.Chain.of_int"
+
+    let pp ppf chain =
+      Int32.pp ppf (to_int32 chain)
+  end
+
+  module Purpose = struct
+    type t = Bip44
+
+    let to_int32 = function
+      | Bip44 -> 44l
+
+    let of_int32 = function
+      | 44l -> Bip44
+      | _ -> invalid_arg "Bip44.Purpose.of_int"
+
+    let pp ppf purpose =
+      Int32.pp ppf (to_int32 purpose)
+  end
+
+  type t = {
+    purpose : Purpose.t ;
+    coin_type : CoinType.t ;
+    account : int ;
+    chain : Chain.t ;
+    index : int ;
+  }
+
+  let create
+      ?(purpose=Purpose.Bip44) ?(coin_type=CoinType.Bitcoin)
+      ?(account=0) ?(chain=Chain.External) ?(index=0) () =
+    { purpose ; coin_type ; account ; chain ; index }
+
+  let of_keypath = function
+    | [ KeyPath.H purpose ; H coin_type ; H account ; N chain ; N index] ->
+      let purpose = Purpose.of_int32 purpose in
+      let coin_type = CoinType.of_int32 coin_type in
+      let account = Int32.to_int_exn account in
+      let chain = Chain.of_int32 chain in
+      let index = Int32.to_int_exn index in
+      { purpose ; coin_type ; account ; chain ; index }
+    | _ -> invalid_arg "Bip44.of_keypath"
+
+  let to_keypath { purpose ; coin_type ; account ; chain ; index } =
+    KeyPath.[H (Purpose.to_int32 purpose) ;
+             H (CoinType.to_int32 coin_type) ;
+             H (Int32.of_int_exn account) ;
+             N (Chain.to_int32 chain) ;
+             N (Int32.of_int_exn index) ; ]
 end
