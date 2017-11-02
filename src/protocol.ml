@@ -77,6 +77,8 @@ module Outpoint = struct
     i : int ;
   } [@@deriving sexp]
 
+  let create hash i = { hash ; i }
+
   let size =
     CS.Outpoint.sizeof_t
 
@@ -99,6 +101,11 @@ module TxIn = struct
     script : Script.t ;
     seq : Int32.t ;
   } [@@deriving sexp]
+
+  let create ?(seq=0xffffffffl) ~prev_out ~script () = { prev_out ; script ; seq }
+  let create' ?(seq=0xffffffffl) ~prev_out_hash ~prev_out_i ~script () =
+    let prev_out = Outpoint.create prev_out_hash prev_out_i in
+    { prev_out ; script ; seq }
 
   let size { script } =
     let scriptsize = Script.size script in
@@ -126,6 +133,8 @@ module TxOut = struct
     value : Int64.t ;
     script : Script.t ;
   } [@@deriving sexp]
+
+  let create ~value ~script = { value ; script }
 
   let size { script } =
     let scriptsize = Script.size script in

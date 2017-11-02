@@ -40,6 +40,8 @@ module Outpoint : sig
     i : int ;
   }
 
+  val create : Hash256.t -> int -> t
+
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
 end
@@ -51,6 +53,12 @@ module TxIn : sig
     seq : Int32.t ;
   }
 
+  val create :
+    ?seq:Int32.t -> prev_out:Outpoint.t -> script:Script.t -> unit -> t
+
+  val create' :
+    ?seq:Int32.t -> prev_out_hash:Hash256.t -> prev_out_i:int -> script:Script.t -> unit -> t
+
   val size : t -> int
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
@@ -61,6 +69,8 @@ module TxOut : sig
     value : Int64.t ;
     script : Script.t ;
   }
+
+  val create : value:Int64.t -> script:Script.t -> t
 
   val size : t -> int
   val of_cstruct : Cstruct.t -> t * Cstruct.t
