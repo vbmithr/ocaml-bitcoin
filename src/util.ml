@@ -377,12 +377,10 @@ module KeyPath = struct
 
   let write_be_cstruct cs t =
     let open Cstruct in
-    let len =
-      List.fold_left t ~init:0 ~f:begin fun i -> function
-        | N v -> BE.set_uint32 cs (i*4) v; i+1
-        | H v -> BE.set_uint32 cs (i*4) Int32.(v lor 0x80000000l); i+1
-      end in
-    Cstruct.shift cs (len * 4)
+    List.fold_left t ~init:cs ~f:begin fun cs -> function
+      | N v -> BE.set_uint32 cs 0 v; Cstruct.shift cs 4
+      | H v -> BE.set_uint32 cs 0 Int32.(v lor 0x80000000l); Cstruct.shift cs 4
+    end
 end
 
 module Bip44 = struct
