@@ -77,6 +77,11 @@ module Outpoint = struct
     i : int ;
   } [@@deriving sexp]
 
+  let pp ppf { hash ; i } =
+    Format.fprintf ppf "%a %d" Hash256.pp hash i
+  let show { hash ; i } =
+    Format.asprintf "%a %d" Hash256.pp hash i
+
   let create hash i = { hash ; i }
 
   let size =
@@ -101,6 +106,11 @@ module TxIn = struct
     script : Script.t ;
     seq : Int32.t ;
   } [@@deriving sexp]
+
+  let pp ppf t =
+    Format.fprintf ppf "%a" Sexplib.Sexp.pp_hum (sexp_of_t t)
+  let show t =
+    Sexplib.Sexp.to_string_hum (sexp_of_t t)
 
   let create ?(seq=0xffffffffl) ~prev_out ~script () = { prev_out ; script ; seq }
   let create' ?(seq=0xffffffffl) ~prev_out_hash ~prev_out_i ~script () =
@@ -133,6 +143,11 @@ module TxOut = struct
     value : Int64.t ;
     script : Script.t ;
   } [@@deriving sexp]
+
+  let pp ppf t =
+    Format.fprintf ppf "%a" Sexplib.Sexp.pp_hum (sexp_of_t t)
+  let show t =
+    Sexplib.Sexp.to_string_hum (sexp_of_t t)
 
   let create ~value ~script = { value ; script }
 
@@ -189,6 +204,11 @@ module Transaction = struct
     outputs : TxOut.t list ;
     lock_time : LockTime.t ;
   } [@@deriving sexp]
+
+  let pp ppf t =
+    Format.fprintf ppf "%a" Sexplib.Sexp.pp_hum (sexp_of_t t)
+  let show t =
+    Sexplib.Sexp.to_string_hum (sexp_of_t t)
 
   let create ?(version=1) ?(lock_time=LockTime.block 0) ~inputs ~outputs () =
     { version ; inputs ; outputs ; lock_time }

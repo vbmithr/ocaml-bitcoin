@@ -38,12 +38,18 @@ module Outpoint : sig
   type t = {
     hash : Hash256.t ;
     i : int ;
-  }
+  } [@@deriving sexp]
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 
   val create : Hash256.t -> int -> t
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 end
 
 module TxIn : sig
@@ -51,7 +57,10 @@ module TxIn : sig
     prev_out : Outpoint.t ;
     script : Script.t ;
     seq : Int32.t ;
-  }
+  } [@@deriving sexp]
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 
   val create :
     ?seq:Int32.t -> prev_out:Outpoint.t -> script:Script.t -> unit -> t
@@ -68,7 +77,10 @@ module TxOut : sig
   type t = {
     value : Int64.t ;
     script : Script.t ;
-  }
+  } [@@deriving sexp]
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 
   val create : value:Int64.t -> script:Script.t -> t
 
@@ -98,6 +110,9 @@ module Transaction : sig
     outputs : TxOut.t list ;
     lock_time : LockTime.t ;
   } [@@deriving sexp]
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 
   val create :
     ?version:int -> ?lock_time:LockTime.t ->
