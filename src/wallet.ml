@@ -25,7 +25,7 @@ module WIF = struct
     let cs = Cstruct.create (if compress then 32 else 33) in
     Secp256k1.Secret.write cs.buffer privkey ;
     if compress then Cstruct.set_uint8 cs 32 0x01 ;
-    Base58.Bitcoin.create ~version (Cstruct.to_string cs)
+    Base58.Bitcoin.create ~version ~payload:(Cstruct.to_string cs)
 
   let of_base58 ctx { Base58.Bitcoin.version ; payload } =
     match version with
@@ -42,25 +42,28 @@ module Address = struct
   let of_wif ctx { WIF.privkey ; testnet ; compress } =
     let open Secp256k1 in
     let pk = Public.of_secret ctx privkey in
-    let pk = Public.to_bytes ~compress ctx pk |> Cstruct.of_bigarray in
-    let hash160, _ = Util.Hash160.of_cstruct pk in
+    let pk = Public.to_bytes ~compress ctx pk in
+    let hash160 = Util.Hash160.compute_bigarray pk in
     Base58.Bitcoin.create
-      ~version:(if testnet then Testnet_P2PKH else P2PKH) (Util.Hash160.to_string hash160)
+      ~version:(if testnet then Testnet_P2PKH else P2PKH)
+      ~payload:(Util.Hash160.to_string hash160)
 
   let of_pubkey ?(testnet=false) ?(compress=true) ctx pk =
-    let pk = Secp256k1.Public.to_bytes ~compress ctx pk |> Cstruct.of_bigarray in
-    let hash160, _ = Util.Hash160.of_cstruct pk in
+    let pk = Secp256k1.Public.to_bytes ~compress ctx pk in
+    let hash160 = Util.Hash160.compute_bigarray pk in
     Base58.Bitcoin.create
-      ~version:(if testnet then Testnet_P2PKH else P2PKH) (Util.Hash160.to_string hash160)
+      ~version:(if testnet then Testnet_P2PKH else P2PKH)
+      ~payload:(Util.Hash160.to_string hash160)
 
   let max_serialized_script_size = 520
 
   let of_script ?(testnet=false) script =
     let cs = Cstruct.create max_serialized_script_size in
     let cs' = Script.to_cstruct cs script in
-    let hash160, _ = Util.Hash160.of_cstruct (Cstruct.sub cs 0 cs'.off) in
+    let hash160 = Util.Hash160.compute_cstruct (Cstruct.sub cs 0 cs'.off) in
     Base58.Bitcoin.create
-      ~version:(if testnet then Testnet_P2SH else P2SH) (Util.Hash160.to_string hash160)
+      ~version:(if testnet then Testnet_P2SH else P2SH)
+      ~payload:(Util.Hash160.to_string hash160)
 
   let to_script { Base58.Bitcoin.version ; payload } =
     match version with
