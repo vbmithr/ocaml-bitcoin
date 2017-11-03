@@ -5,7 +5,7 @@ let assert_equal a b = assert (a = b)
 module Util = struct
   open Util
   let test_keyPath_of_string () =
-    let kp = KeyPath.of_string "44'/1'/0'/0/0" in
+    let kp = KeyPath.of_string_exn "44'/1'/0'/0/0" in
     assert_equal kp [H 44l; H 1l; H 0l; N 0l; N 0l]
 
   let verify_size () =

@@ -355,9 +355,14 @@ module KeyPath = struct
 
   type t = derivation list
 
+  let of_string_exn s =
+    try
+      let derivations = String.split ~on:'/' s in
+      List.map derivations ~f:derivation_of_string
+    with _ -> invalid_arg (Printf.sprintf "KeyPath.of_string_exn: got %S" s)
+
   let of_string s =
-    let derivations = String.split ~on:'/' s in
-    List.map derivations ~f:derivation_of_string
+    try Some (of_string_exn s) with _ -> None
 
   let to_string t =
     List.map t ~f:string_of_derivation |>

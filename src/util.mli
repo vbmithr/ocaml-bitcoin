@@ -118,7 +118,8 @@ module KeyPath : sig
   type derivation = N of Int32.t | H of Int32.t
   type t = derivation list
 
-  val of_string : string -> t
+  val of_string_exn : string -> t
+  val of_string : string -> t option
   val to_string : t -> string
   val pp : Format.formatter -> t -> unit
 
