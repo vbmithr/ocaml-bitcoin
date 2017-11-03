@@ -158,16 +158,14 @@ module TxOut = struct
 
   let of_cstruct cs =
     let value = Cstruct.LE.get_uint64 cs 0 in
-    let cs = Cstruct.shift cs 8 in
-    let scriptsize, cs = CompactSize.of_cstruct_int cs in
+    let scriptsize, cs = CompactSize.of_cstruct_int (Cstruct.shift cs 8) in
     let script, cs = Script.of_cstruct cs scriptsize in
     { value ; script }, cs
 
   let to_cstruct cs { value ; script } =
     let scriptsize = Script.size script in
     Cstruct.LE.set_uint64 cs 0 value ;
-    let cs = Cstruct.shift cs 8 in
-    let cs = CompactSize.to_cstruct_int cs scriptsize in
+    let cs = CompactSize.to_cstruct_int (Cstruct.shift cs 8) scriptsize in
     Script.to_cstruct cs script
 end
 
