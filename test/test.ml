@@ -4,15 +4,11 @@ let assert_equal a b = assert (a = b)
 
 module Util = struct
   open Util
-  let test_keyPath_of_string () =
-    let kp = KeyPath.of_string_exn "44'/1'/0'/0/0" in
-    assert_equal kp [H 44l; H 1l; H 0l; N 0l; N 0l]
 
   let verify_size () =
     assert_equal (String.length (Hash160.(compute_string "" |> to_string))) Hash160.length
 
   let runtest = [
-    "KeyPath.of_string", `Quick, test_keyPath_of_string ;
     "Hash160.{of_string,to_string}", `Quick, verify_size ;
   ]
 end
@@ -74,9 +70,20 @@ module Transaction = struct
   ]
 end
 
+module Wallet = struct
+  let test_keyPath_of_string () =
+    let kp = Wallet.KeyPath.of_string_exn "44'/1'/0'/0/0" in
+    assert_equal kp [H 44l; H 1l; H 0l; N 0l; N 0l]
+
+  let runtest = [
+    "KeyPath.of_string", `Quick, test_keyPath_of_string ;
+  ]
+end
+
 let () =
   Alcotest.run "bitcoin" [
     "Util", Util.runtest ;
     "Script", Script.runtest ;
     "Transaction", Transaction.runtest ;
+    "Wallet", Wallet.runtest ;
   ]
