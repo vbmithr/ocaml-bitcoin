@@ -133,6 +133,18 @@ val size : t -> int
 
 val of_cstruct : Cstruct.t -> int -> t * Cstruct.t
 val to_cstruct : Cstruct.t -> Element.t list -> Cstruct.t
+val hash160 : t -> Util.Hash160.t
+
+module Std : sig
+  module P2PKH : sig
+    val scriptRedeem : Secp256k1.Context.t -> Secp256k1.Public.t -> t
+    val scriptSig : Secp256k1.Context.t -> Cstruct.t -> Secp256k1.Public.t -> t
+  end
+
+  module P2SH : sig
+    val scriptRedeem : t -> t
+  end
+end
 
 module Run : sig
   val eval_exn : t -> bool * Cstruct.t list * t

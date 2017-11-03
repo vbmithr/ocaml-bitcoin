@@ -418,6 +418,33 @@ let of_cstruct cs len =
 let to_cstruct cs elts =
   Base.List.fold_left elts ~init:cs ~f:Element.to_cstruct
 
+let hash160 t =
+  let scriptlen = size t in
+  let cs = Cstruct.create scriptlen in
+  let _ = to_cstruct cs t in
+  Hash160.compute_cstruct cs
+
+module Std = struct
+  module P2PKH = struct
+    let scriptRedeem ctx pk =
+      let pk_hash = Cstruct.of_bigarray (Secp256k1.Public.to_bytes ctx pk) in
+      Element.[O Op_dup ; O Op_hash160 ;
+               O (Op_pushdata 20) ; D pk_hash ; O Op_equalverify ; O Op_checksig ]
+
+    let scriptSig ctx signature pk =
+      let sig_len = Cstruct.len signature in
+      let pk_hash = Cstruct.of_bigarray (Secp256k1.Public.to_bytes ctx pk) in
+      Element.[O (Op_pushdata sig_len) ; D signature ; O (Op_pushdata 20) ; D pk_hash ]
+  end
+
+  module P2SH = struct
+    let scriptRedeem script =
+      let script_hash = Cstruct.create Hash160.length in
+      let _ = Hash160.to_cstruct script_hash (hash160 script) in
+      Element.[ O Op_hash160 ; O (Op_pushdata 20) ; D script_hash ; O Op_equalverify ]
+  end
+end
+
 module Stack = struct
   open Stdint
   let to_int32 cs =
