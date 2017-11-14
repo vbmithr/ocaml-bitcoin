@@ -38,6 +38,12 @@ module WIF = struct
     let cs = Cstruct.of_string payload in
     let privkey = Secp256k1.Secret.of_bytes_exn ctx cs.buffer in
     create ~testnet ~compress privkey
+
+  let pp ppf t =
+    Base58.Bitcoin.pp ppf (to_base58 t)
+
+  let show t =
+    Base58.Bitcoin.show (to_base58 t)
 end
 
 module Address = struct

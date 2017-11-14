@@ -9,13 +9,14 @@ module WIF : sig
     compress : bool ;
   }
 
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
+
   val create :
     ?testnet:bool -> ?compress:bool -> Secp256k1.Secret.t -> t
 
   val to_base58 : t -> Base58.Bitcoin.t
-
-  val of_base58 :
-    Secp256k1.Context.t -> Base58.Bitcoin.t -> t
+  val of_base58 : Secp256k1.Context.t -> Base58.Bitcoin.t -> t
 end
 
 module Address : sig

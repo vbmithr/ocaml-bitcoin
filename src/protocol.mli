@@ -121,6 +121,9 @@ module Transaction : sig
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
 
+  val of_hex : Hex.t -> t
+  val to_hex : t -> Hex.t
+
   val size : t -> int
   val hash256 : t -> Hash256.t
 end
@@ -130,6 +133,9 @@ module Block : sig
     header : Header.t ;
     txns : Transaction.t list ;
   } [@@deriving sexp]
+
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
 end

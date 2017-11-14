@@ -229,6 +229,15 @@ module Transaction = struct
     let cs = ObjList.to_cstruct cs outputs ~f:TxOut.to_cstruct in
     LockTime.to_cstruct cs lock_time
 
+  let to_hex t =
+    let cs = Cstruct.create (size t) in
+    let _ = to_cstruct cs t in
+    Hex.of_cstruct cs
+
+  let of_hex hex =
+    let cs = Hex.to_cstruct hex in
+    fst (of_cstruct cs)
+
   let hash256 t =
     let cs = Cstruct.create (size t) in
     let _ = to_cstruct cs t in
@@ -240,6 +249,11 @@ module Block = struct
     header : Header.t ;
     txns : Transaction.t list ;
   } [@@deriving sexp]
+
+  let pp ppf t =
+    Sexplib.Sexp.pp_hum ppf (sexp_of_t t)
+  let show t =
+    Format.asprintf "%a" pp t
 
   let of_cstruct cs =
     let header, cs = Header.of_cstruct cs in
