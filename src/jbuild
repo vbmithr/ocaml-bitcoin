@@ -6,6 +6,7 @@
   (libraries (bitcoin_cstruct
               base
               stdint
+              ocplib-endian
               ipaddr
               ptime
               ptime.clock.os

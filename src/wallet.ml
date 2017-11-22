@@ -5,7 +5,7 @@ module Private = struct
     let cs = Cstruct.create 32 in
     let rec loop_gen () =
       Sodium.Random.Bigbytes.generate_into cs.buffer ;
-      match Secp256k1.Secret.of_bytes ctx cs.buffer with
+      match Secp256k1.Secret.read ctx cs.buffer with
       | Some t -> t
       | None -> loop_gen ()
     in loop_gen ()
@@ -36,7 +36,7 @@ module WIF = struct
       | _ -> invalid_arg "WIF.to_private: input is not a privkey address" in
     let compress = String.length payload = 33 in
     let cs = Cstruct.of_string payload in
-    let privkey = Secp256k1.Secret.of_bytes_exn ctx cs.buffer in
+    let privkey = Secp256k1.Secret.read_exn ctx cs.buffer in
     create ~testnet ~compress privkey
 
   let pp ppf t =

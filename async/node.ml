@@ -181,7 +181,9 @@ let main testnet host port daemon datadir rundir logdir loglevel () =
     | false, None -> Network.(port Mainnet) in
   stage begin fun `Scheduler_started ->
     info "Connecting to %s:%d" host port ;
-    Tcp.(with_connection (to_host_and_port host port) (main_loop port))
+    Tcp.(with_connection
+           Where_to_connect.(of_host_and_port (Host_and_port.create ~host ~port))
+           (main_loop port))
   end
 
 let command =
@@ -197,7 +199,7 @@ let command =
     +> flag "-logdir" (optional_with_default "log" string) ~doc:"dirname Log directory (log)"
     +> flag "-loglevel" (optional_with_default 1 int) ~doc:"1-3 global loglevel"
   in
-  Command.Staged.async ~summary:"Bitcoin Node" spec main
+  Command.Staged.async_spec ~summary:"Bitcoin Node" spec main
 
 let () = Command.run command
 

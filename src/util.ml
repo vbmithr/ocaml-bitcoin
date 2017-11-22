@@ -12,7 +12,7 @@ let c_string_of_cstruct cs =
 
 let bytes_with_msg ~len msg =
   let buf = String.make len '\x00' in
-  String.(blit msg 0 buf 0 (Int.min (length buf - 1) (length msg)));
+  Bytes.(blit msg 0 buf 0 (Int.min (length buf - 1) (length msg)));
   buf
 
 module Bool = struct
@@ -314,7 +314,7 @@ module Bitv = struct
 
   let to_string_le bitv =
     let nb_bytes = Bitv.length bitv / 8 in
-    let s = String.create nb_bytes in
+    let s = Bytes.create nb_bytes in
     let v = ref 0 in
     for i = 0 to nb_bytes - 1 do
       v := 0 ;
