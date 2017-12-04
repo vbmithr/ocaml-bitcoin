@@ -11,9 +11,9 @@ let c_string_of_cstruct cs =
   String.(sub str 0 (index_exn str '\x00'))
 
 let bytes_with_msg ~len msg =
-  let buf = String.make len '\x00' in
-  Bytes.(blit msg 0 buf 0 (Int.min (length buf - 1) (length msg)));
-  buf
+  let buf = Bytes.make len '\x00' in
+  Bytes.From_string.(blit msg 0 buf 0 (Int.min (Bytes.length buf - 1) (String.length msg)));
+  Bytes.unsafe_to_string buf
 
 module Bool = struct
   let of_int = function
@@ -125,7 +125,8 @@ module Hash (H2 : Digestif.S) (H1 : Digestif.S) = struct
       compute_bigarray (Cstruct.to_bigarray cs)
 
     let compute_string data =
-      Hash (H2.Bytes.digest (H1.Bytes.digest data))
+      let data = Bytes.unsafe_of_string_promise_no_mutation data in
+      Hash (Bytes.unsafe_to_string (H2.Bytes.digest (H1.Bytes.digest data)))
 
     let compute_concat (Hash h1) (Hash h2) =
       compute_string (h1 ^ h2)
@@ -324,7 +325,7 @@ module Bitv = struct
       done ;
       EndianString.BigEndian.set_int8 s i !v
     done ;
-    s
+    Bytes.unsafe_to_string s
 
   let of_string_le s =
     let len = String.length s in

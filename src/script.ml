@@ -450,10 +450,10 @@ module Stack = struct
   let to_int32 cs =
     match cs.Cstruct.len with
     | 0 -> 0l
-    | 1 -> Int8.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int32)
-    | 2 -> Int16.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int32)
-    | 3 -> Int24.(of_bytes_little_endian (Cstruct.to_string cs) 0 |> to_int32)
-    | 4 -> Int32.(of_bytes_little_endian (Cstruct.to_string cs) 0)
+    | 1 -> Int8.(of_bytes_little_endian (Cstruct.to_bytes cs) 0 |> to_int32)
+    | 2 -> Int16.(of_bytes_little_endian (Cstruct.to_bytes cs) 0 |> to_int32)
+    | 3 -> Int24.(of_bytes_little_endian (Cstruct.to_bytes cs) 0 |> to_int32)
+    | 4 -> Int32.(of_bytes_little_endian (Cstruct.to_bytes cs) 0)
     | _ -> invalid_arg "Stack.to_int32: input is longer than 4 bytes"
 
   let of_int32 i =
