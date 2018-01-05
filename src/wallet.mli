@@ -29,15 +29,14 @@ module Address : sig
 end
 
 module KeyPath : sig
-  type derivation = N of Int32.t | H of Int32.t
-  type t = derivation list
+  type t = Int32.t list
 
   val of_string_exn : string -> t
   val of_string : string -> t option
   val to_string : t -> string
   val pp : Format.formatter -> t -> unit
 
-  val write_be : Caml.Bytes.t -> int -> t -> int
+  val write_be : Bytes.t -> int -> t -> int
   val write_be_cstruct : Cstruct.t -> t -> Cstruct.t
 end
 

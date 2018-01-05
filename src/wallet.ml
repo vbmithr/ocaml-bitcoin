@@ -87,24 +87,26 @@ module Address = struct
 end
 
 module KeyPath = struct
-  type derivation = N of Int32.t | H of Int32.t
-
   let derivation_of_string d =
     match String.(get d (length d - 1)) with
-    | '\'' -> H (Int32.of_string String.(sub d 0 (length d - 1)))
-    | _ -> N (Int32.of_string d)
+    | '\'' ->
+      let v = String.(sub d 0 (length d - 1)) |> Int32.of_string in
+      Int32.(0x8000_0000l lor v)
+    | _ ->
+      Int32.of_string d
 
   let string_of_derivation = function
-    | N i -> Int32.to_string i
-    | H i -> Int32.to_string i ^ "'"
+    | i when Int32.(0x8000_0000l land i = 0l) -> Int32.to_string i
+    | i -> Int32.to_string i ^ "'"
 
-  type t = derivation list
+  type t = Int32.t list
 
   let of_string_exn s =
     try
       let derivations = String.split ~on:'/' s in
       List.map derivations ~f:derivation_of_string
-    with _ -> invalid_arg (Printf.sprintf "KeyPath.of_string_exn: got %S" s)
+    with _ ->
+      invalid_arg (Printf.sprintf "KeyPath.of_string_exn: got %S" s)
 
   let of_string s =
     try Some (of_string_exn s) with _ -> None
@@ -119,17 +121,15 @@ module KeyPath = struct
   let write_be buf pos t =
     let open EndianBytes.BigEndian in
     let len =
-      List.fold_left t ~init:0 ~f:begin fun i -> function
-        | N v -> set_int32 buf (pos+i*4) v; i+1
-        | H v -> set_int32 buf (pos+i*4) Int32.(v lor 0x80000000l); i+1
+      List.fold_left t ~init:0 ~f:begin fun i v ->
+        set_int32 buf (pos+i*4) v; i+1
       end in
     pos + len * 4
 
   let write_be_cstruct cs t =
     let open Cstruct in
-    List.fold_left t ~init:cs ~f:begin fun cs -> function
-      | N v -> BE.set_uint32 cs 0 v; Cstruct.shift cs 4
-      | H v -> BE.set_uint32 cs 0 Int32.(v lor 0x80000000l); Cstruct.shift cs 4
+    List.fold_left t ~init:cs ~f:begin fun cs v ->
+      BE.set_uint32 cs 0 v; Cstruct.shift cs 4
     end
 end
 
@@ -192,26 +192,29 @@ module Bip44 = struct
     index : int ;
   }
 
+  let of_hardened i = Int32.(i land 0x7fff_ffffl)
+  let to_hardened i = Int32.(i lor 0x8000_0000l)
+
   let create
       ?(purpose=Purpose.Bip44) ?(coin_type=CoinType.Bitcoin)
       ?(account=0) ?(chain=Chain.External) ?(index=0) () =
     { purpose ; coin_type ; account ; chain ; index }
 
   let of_keypath = function
-    | [ KeyPath.H purpose ; H coin_type ; H account ; N chain ; N index] ->
-      let purpose = Purpose.of_int32 purpose in
-      let coin_type = CoinType.of_int32 coin_type in
-      let account = Int32.to_int_exn account in
+    | [ purpose ; coin_type ; account ; chain ; index] ->
+      let purpose = Purpose.of_int32 (of_hardened purpose) in
+      let coin_type = CoinType.of_int32 (of_hardened coin_type) in
+      let account = Int32.to_int_exn (of_hardened account) in
       let chain = Chain.of_int32 chain in
       let index = Int32.to_int_exn index in
       { purpose ; coin_type ; account ; chain ; index }
     | _ -> invalid_arg "Bip44.of_keypath"
 
   let to_keypath { purpose ; coin_type ; account ; chain ; index } =
-    KeyPath.[H (Purpose.to_int32 purpose) ;
-             H (CoinType.to_int32 coin_type) ;
-             H (Int32.of_int_exn account) ;
-             N (Chain.to_int32 chain) ;
-             N (Int32.of_int_exn index) ; ]
+    KeyPath.[to_hardened (Purpose.to_int32 purpose) ;
+             to_hardened (CoinType.to_int32 coin_type) ;
+             to_hardened (Int32.of_int_exn account) ;
+             Chain.to_int32 chain ;
+             Int32.of_int_exn index ]
 end
 
