@@ -119,7 +119,8 @@ module Hash (H2 : Digestif.S) (H1 : Digestif.S) = struct
       Cstruct.shift cs length
 
     let compute_bigarray data =
-      Hash (Digestif.(Bi.to_string (H2.Bigstring.digest (H1.Bigstring.digest data))))
+      Hash Cstruct.((H2.Bigstring.digest (H1.Bigstring.digest data))
+                    |> of_bigarray |> to_string)
 
     let compute_cstruct cs =
       compute_bigarray (Cstruct.to_bigarray cs)
@@ -165,8 +166,10 @@ module Hash256 : HASH = Hash (Digestif.SHA256) (Digestif.SHA256)
 
 module Chksum = struct
   let compute cs =
-    let data = Cstruct.to_bigarray cs in
-    Digestif.(Bi.(sub SHA256.Bigstring.(digest (digest data)) 0 4 |> to_string))
+    let open Cstruct in
+    let data = to_bigarray cs in
+    Digestif.SHA256.Bigstring.(digest (digest data)) |>
+    of_bigarray |> fun cs -> sub cs 0 4 |> to_string
 
   let compute' cs_start cs_end =
     let size = cs_end.Cstruct.off - cs_start.Cstruct.off in
