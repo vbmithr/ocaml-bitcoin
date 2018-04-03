@@ -427,13 +427,13 @@ let hash160 t =
 module Std = struct
   module P2PKH = struct
     let scriptRedeem ctx pk =
-      let pk_hash = Cstruct.of_bigarray (Secp256k1.Public.to_bytes ctx pk) in
+      let pk_hash = Cstruct.of_bigarray (Secp256k1.Key.to_bytes ctx pk) in
       Element.[O Op_dup ; O Op_hash160 ;
                O (Op_pushdata 20) ; D pk_hash ; O Op_equalverify ; O Op_checksig ]
 
     let scriptSig ctx signature pk =
       let sig_len = Cstruct.len signature in
-      let pk_hash = Cstruct.of_bigarray (Secp256k1.Public.to_bytes ctx pk) in
+      let pk_hash = Cstruct.of_bigarray (Secp256k1.Key.to_bytes ctx pk) in
       Element.[O (Op_pushdata sig_len) ; D signature ; O (Op_pushdata 20) ; D pk_hash ]
   end
 

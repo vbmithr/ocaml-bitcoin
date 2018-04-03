@@ -113,3 +113,6 @@ module Bitv : sig
 
   val to_bool_list : t -> bool list
 end
+
+module Crypto : Base58.CRYPTO
+val c : (module Base58.CRYPTO)

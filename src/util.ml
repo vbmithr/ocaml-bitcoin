@@ -344,3 +344,12 @@ module Bitv = struct
   let to_bool_list bv =
     Bitv.fold_right (fun v acc -> v :: acc) bv []
 end
+
+module Crypto = struct
+  let sha256 s =
+    Bytes.unsafe_of_string_promise_no_mutation s |>
+    Digestif.SHA256.Bytes.digest |> fun b ->
+    Bytes.unsafe_to_string ~no_mutation_while_string_reachable:b
+end
+
+let c = (module Crypto : Base58.CRYPTO)

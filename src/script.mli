@@ -137,8 +137,8 @@ val hash160 : t -> Util.Hash160.t
 
 module Std : sig
   module P2PKH : sig
-    val scriptRedeem : Secp256k1.Context.t -> Secp256k1.Public.t -> t
-    val scriptSig : Secp256k1.Context.t -> Cstruct.t -> Secp256k1.Public.t -> t
+    val scriptRedeem : Secp256k1.Context.t -> Secp256k1.Key.public Secp256k1.Key.t -> t
+    val scriptSig : Secp256k1.Context.t -> Cstruct.t -> Secp256k1.Key.public Secp256k1.Key.t -> t
   end
 
   module P2SH : sig

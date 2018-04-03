@@ -11,10 +11,10 @@
               ptime
               ptime.clock.os
               cstruct
-              digestif.c
               hex
               bitv
               murmur3
+              digestif.c
               secp256k1
-              sodium
+              tweetnacl
               base58))))

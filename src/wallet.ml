@@ -1,19 +1,20 @@
 open Base
+open Util
 
 module Private = struct
   let generate ctx =
     let cs = Cstruct.create 32 in
     let rec loop_gen () =
-      Sodium.Random.Bigbytes.generate_into cs.buffer ;
-      match Secp256k1.Secret.read ctx cs.buffer with
-      | Some t -> t
-      | None -> loop_gen ()
+      Tweetnacl.Rand.write cs ;
+      match Secp256k1.Key.read_sk ctx cs.buffer with
+      | Ok t -> t
+      | Error _ -> loop_gen ()
     in loop_gen ()
 end
 
 module WIF = struct
   type t = {
-    privkey : Secp256k1.Secret.t ;
+    privkey : Secp256k1.Key.secret Secp256k1.Key.t ;
     testnet : bool ;
     compress : bool ;
   }
@@ -21,11 +22,11 @@ module WIF = struct
   let create ?(testnet=false) ?(compress=true) privkey =
     { privkey ; testnet ; compress }
 
-  let to_base58 { privkey ; testnet ; compress } =
+  let to_base58 ctx { privkey ; testnet ; compress } =
     let version =
       Base58.Bitcoin.(if testnet then Testnet_privkey else Privkey) in
     let cs = Cstruct.create (if compress then 32 else 33) in
-    Secp256k1.Secret.write cs.buffer privkey ;
+    let _nb_written = Secp256k1.Key.write ~compress ctx cs.buffer privkey in
     if compress then Cstruct.set_uint8 cs 32 0x01 ;
     Base58.Bitcoin.create ~version ~payload:(Cstruct.to_string cs)
 
@@ -36,28 +37,27 @@ module WIF = struct
       | _ -> invalid_arg "WIF.to_private: input is not a privkey address" in
     let compress = String.length payload = 33 in
     let cs = Cstruct.of_string payload in
-    let privkey = Secp256k1.Secret.read_exn ctx cs.buffer in
+    let privkey = Secp256k1.Key.read_sk_exn ctx cs.buffer in
     create ~testnet ~compress privkey
 
-  let pp ppf t =
-    Base58.Bitcoin.pp ppf (to_base58 t)
+  let pp ctx ppf t =
+    Base58.Bitcoin.pp c ppf (to_base58 ctx t)
 
-  let show t =
-    Base58.Bitcoin.show (to_base58 t)
+  let show ctx t =
+    Base58.Bitcoin.show c (to_base58 ctx t)
 end
 
 module Address = struct
   let of_wif ctx { WIF.privkey ; testnet ; compress } =
-    let open Secp256k1 in
-    let pk = Public.of_secret ctx privkey in
-    let pk = Public.to_bytes ~compress ctx pk in
+    let pk = Secp256k1.Key.neuterize_exn ctx privkey in
+    let pk = Secp256k1.Key.to_bytes ~compress ctx pk in
     let hash160 = Util.Hash160.compute_bigarray pk in
     Base58.Bitcoin.create
       ~version:(if testnet then Testnet_P2PKH else P2PKH)
       ~payload:(Util.Hash160.to_string hash160)
 
   let of_pubkey ?(testnet=false) ?(compress=true) ctx pk =
-    let pk = Secp256k1.Public.to_bytes ~compress ctx pk in
+    let pk = Secp256k1.Key.to_bytes ~compress ctx pk in
     let hash160 = Util.Hash160.compute_bigarray pk in
     Base58.Bitcoin.create
       ~version:(if testnet then Testnet_P2PKH else P2PKH)
@@ -100,6 +100,9 @@ module KeyPath = struct
     | i -> Int32.to_string i ^ "'"
 
   type t = Int32.t list
+
+  let of_hardened i = Int32.(i land 0x7fff_ffffl)
+  let to_hardened i = Int32.(i lor 0x8000_0000l)
 
   let of_string_exn s =
     try
@@ -192,9 +195,6 @@ module Bip44 = struct
     index : int ;
   }
 
-  let of_hardened i = Int32.(i land 0x7fff_ffffl)
-  let to_hardened i = Int32.(i lor 0x8000_0000l)
-
   let create
       ?(purpose=Purpose.Bip44) ?(coin_type=CoinType.Bitcoin)
       ?(account=0) ?(chain=Chain.External) ?(index=0) () =
@@ -202,9 +202,9 @@ module Bip44 = struct
 
   let of_keypath = function
     | [ purpose ; coin_type ; account ; chain ; index] ->
-      let purpose = Purpose.of_int32 (of_hardened purpose) in
-      let coin_type = CoinType.of_int32 (of_hardened coin_type) in
-      let account = Int32.to_int_exn (of_hardened account) in
+      let purpose = Purpose.of_int32 (KeyPath.of_hardened purpose) in
+      let coin_type = CoinType.of_int32 (KeyPath.of_hardened coin_type) in
+      let account = Int32.to_int_exn (KeyPath.of_hardened account) in
       let chain = Chain.of_int32 chain in
       let index = Int32.to_int_exn index in
       { purpose ; coin_type ; account ; chain ; index }
