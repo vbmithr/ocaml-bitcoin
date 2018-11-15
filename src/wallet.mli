@@ -1,29 +1,31 @@
+open Libsecp256k1.External
+
 module Private : sig
-  val generate : Secp256k1.Context.t -> Secp256k1.Key.secret Secp256k1.Key.t
+  val generate : Context.t -> Key.secret Key.t
 end
 
 module WIF : sig
   type t = private {
-    privkey : Secp256k1.Key.secret Secp256k1.Key.t ;
+    privkey : Key.secret Key.t ;
     testnet : bool ;
     compress : bool ;
   }
 
-  val pp : Secp256k1.Context.t -> Format.formatter -> t -> unit
-  val show : Secp256k1.Context.t -> t -> string
+  val pp : Context.t -> Format.formatter -> t -> unit
+  val show : Context.t -> t -> string
 
   val create :
-    ?testnet:bool -> ?compress:bool -> Secp256k1.Key.secret Secp256k1.Key.t -> t
+    ?testnet:bool -> ?compress:bool -> Key.secret Key.t -> t
 
-  val to_base58 : Secp256k1.Context.t -> t -> Base58.Bitcoin.t
-  val of_base58 : Secp256k1.Context.t -> Base58.Bitcoin.t -> t
+  val to_base58 : Context.t -> t -> Base58.Bitcoin.t
+  val of_base58 : Context.t -> Base58.Bitcoin.t -> t
 end
 
 module Address : sig
-  val of_wif : Secp256k1.Context.t -> WIF.t -> Base58.Bitcoin.t
+  val of_wif : Context.t -> WIF.t -> Base58.Bitcoin.t
   val of_pubkey :
     ?testnet:bool -> ?compress:bool ->
-    Secp256k1.Context.t -> Secp256k1.Key.public Secp256k1.Key.t -> Base58.Bitcoin.t
+    Context.t -> Key.public Key.t -> Base58.Bitcoin.t
   val of_script : ?testnet:bool -> Script.t -> Base58.Bitcoin.t
   val to_script : Base58.Bitcoin.t -> Script.t
 end

@@ -1,23 +1,21 @@
-opam-version: "1.2"
+opam-version: "2.0"
 name: "bitcoin"
 version: "0.1"
 authors: "Vincent Bernardoff <vb@luminar.eu.org>"
 maintainer: "Vincent Bernardoff <vb@luminar.eu.org>"
 homepage: "https://github.com/vbmithr/ocaml-bitcoin"
 bug-reports: "https://github.com/vbmithr/ocaml-bitcoin/issues"
-dev-repo: "git://github.com/vbmithr/ocaml-bitcoin"
-available: [
-  ocaml-version >= "4.02.0"
-]
-build: [ "jbuilder" "build" "-j" jobs "-p" name "@install" ]
+dev-repo: "git+https://github.com/vbmithr/ocaml-bitcoin"
+build: [ "dune" "build" "-j" jobs "-p" name "@install" ]
 depends: [
-  "jbuilder" {build & >= "1.0+beta11"}
+  "ocaml" {>= "4.02.0"}
+  "dune" {build & >= "1.4.0"}
   "base" {>= "v0.9.3"}
   "stdint" {>= "0.5.0"}
   "ipaddr" {>= "2.8.0"}
   "ptime" {>= "0.8.3"}
   "cstruct" {>= "3.1.1"}
-  "digestif" {>= "0.3"}
+  "digestif" {>= "0.7"}
   "hex" {>= "1.1.1"}
   "bitv" {>= "1.2"}
   "murmur3" {>= "1.0"}

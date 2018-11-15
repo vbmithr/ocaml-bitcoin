@@ -1,4 +1,5 @@
 open Sexplib.Std
+open Libsecp256k1.External
 open Util
 
 module Opcode = struct
@@ -427,13 +428,13 @@ let hash160 t =
 module Std = struct
   module P2PKH = struct
     let scriptRedeem ctx pk =
-      let pk_hash = Cstruct.of_bigarray (Secp256k1.Key.to_bytes ctx pk) in
+      let pk_hash = Cstruct.of_bigarray (Key.to_bytes ctx pk) in
       Element.[O Op_dup ; O Op_hash160 ;
                O (Op_pushdata 20) ; D pk_hash ; O Op_equalverify ; O Op_checksig ]
 
     let scriptSig ctx signature pk =
       let sig_len = Cstruct.len signature in
-      let pk_hash = Cstruct.of_bigarray (Secp256k1.Key.to_bytes ctx pk) in
+      let pk_hash = Cstruct.of_bigarray (Key.to_bytes ctx pk) in
       Element.[O (Op_pushdata sig_len) ; D signature ; O (Op_pushdata 20) ; D pk_hash ]
   end
 
@@ -779,32 +780,38 @@ module Run = struct
         invalid_arg "Run.eval: op_within without at least 3 stack elements"
       | O Op_ripemd160 :: rest, v :: stack ->
         let digest =
-          Cstruct.(of_bigarray Digestif.(RMD160.Bigstring.digest (to_bigarray v))) in
+          let open Digestif.RMD160 in
+          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v)))) in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_ripemd160 :: _, _ ->
         invalid_arg "Run.eval: op_ripemd160 without a top stack element"
       | O Op_sha1 :: rest, v :: stack ->
         let digest =
-          Cstruct.(of_bigarray Digestif.(SHA1.Bigstring.digest (to_bigarray v))) in
+          let open Digestif.SHA1 in
+          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v)))) in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_sha1 :: _, _ ->
         invalid_arg "Run.eval: op_sha1 without a top stack element"
       | O Op_sha256 :: rest, v :: stack ->
+        let open Digestif.SHA256 in
         let digest =
-          Cstruct.(of_bigarray Digestif.(SHA256.Bigstring.digest (to_bigarray v))) in
+          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v)))) in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_sha256 :: _, _ ->
         invalid_arg "Run.eval: op_sha256 without a top stack element"
       | O Op_hash160 :: rest, v :: stack ->
-        let digest =
-          Cstruct.(of_bigarray Digestif.(RMD160.Bigstring.digest
-                                           (SHA256.Bigstring.digest (to_bigarray v)))) in
+        let open Digestif in
+        let first_hash = SHA256.(to_raw_string (digest_bigstring (Cstruct.to_bigarray v))) in
+        let second_hash = RMD160.(to_raw_string (digest_string first_hash)) in
+        let digest = Cstruct.of_string second_hash in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_hash160 :: _, _ ->
         invalid_arg "Run.eval: op_hash160 without a top stack element"
       | O Op_hash256 :: rest, v :: stack ->
-        let digest =
-          Cstruct.(of_bigarray Digestif.SHA256.Bigstring.(digest (digest (to_bigarray v)))) in
+        let open Digestif in
+        let first_hash = SHA256.(to_raw_string (digest_bigstring (Cstruct.to_bigarray v))) in
+        let second_hash = SHA256.(to_raw_string (digest_string first_hash)) in
+        let digest = Cstruct.of_string second_hash in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_hash256 :: _, _ ->
         invalid_arg "Run.eval: op_hash256 without a top stack element"

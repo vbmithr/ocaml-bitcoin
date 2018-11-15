@@ -1,12 +1,13 @@
 open Base
+open Libsecp256k1.External
 open Util
 
 module Private = struct
   let generate ctx =
-    let cs = Cstruct.create 32 in
+    let buf = Bigstring.create 32 in
     let rec loop_gen () =
-      Tweetnacl.Rand.write cs ;
-      match Secp256k1.Key.read_sk ctx cs.buffer with
+      let _nb_written = Monocypher.Rand.write buf in
+      match Key.read_sk ctx buf with
       | Ok t -> t
       | Error _ -> loop_gen ()
     in loop_gen ()
@@ -14,7 +15,7 @@ end
 
 module WIF = struct
   type t = {
-    privkey : Secp256k1.Key.secret Secp256k1.Key.t ;
+    privkey : Key.secret Key.t ;
     testnet : bool ;
     compress : bool ;
   }
@@ -26,7 +27,7 @@ module WIF = struct
     let version =
       Base58.Bitcoin.(if testnet then Testnet_privkey else Privkey) in
     let cs = Cstruct.create (if compress then 32 else 33) in
-    let _nb_written = Secp256k1.Key.write ~compress ctx cs.buffer privkey in
+    let _nb_written = Key.write ~compress ctx cs.buffer privkey in
     if compress then Cstruct.set_uint8 cs 32 0x01 ;
     Base58.Bitcoin.create ~version ~payload:(Cstruct.to_string cs)
 
@@ -37,7 +38,7 @@ module WIF = struct
       | _ -> invalid_arg "WIF.to_private: input is not a privkey address" in
     let compress = String.length payload = 33 in
     let cs = Cstruct.of_string payload in
-    let privkey = Secp256k1.Key.read_sk_exn ctx cs.buffer in
+    let privkey = Key.read_sk_exn ctx cs.buffer in
     create ~testnet ~compress privkey
 
   let pp ctx ppf t =
@@ -49,15 +50,15 @@ end
 
 module Address = struct
   let of_wif ctx { WIF.privkey ; testnet ; compress } =
-    let pk = Secp256k1.Key.neuterize_exn ctx privkey in
-    let pk = Secp256k1.Key.to_bytes ~compress ctx pk in
+    let pk = Key.neuterize_exn ctx privkey in
+    let pk = Key.to_bytes ~compress ctx pk in
     let hash160 = Util.Hash160.compute_bigarray pk in
     Base58.Bitcoin.create
       ~version:(if testnet then Testnet_P2PKH else P2PKH)
       ~payload:(Util.Hash160.to_string hash160)
 
   let of_pubkey ?(testnet=false) ?(compress=true) ctx pk =
-    let pk = Secp256k1.Key.to_bytes ~compress ctx pk in
+    let pk = Key.to_bytes ~compress ctx pk in
     let hash160 = Util.Hash160.compute_bigarray pk in
     Base58.Bitcoin.create
       ~version:(if testnet then Testnet_P2PKH else P2PKH)

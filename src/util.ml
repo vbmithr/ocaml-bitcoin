@@ -119,15 +119,17 @@ module Hash (H2 : Digestif.S) (H1 : Digestif.S) = struct
       Cstruct.shift cs length
 
     let compute_bigarray data =
-      Hash Cstruct.((H2.Bigstring.digest (H1.Bigstring.digest data))
-                    |> of_bigarray |> to_string)
+      let first_hash = H1.(to_raw_string (digest_bigstring data)) in
+      let second_hash = H2.(to_raw_string (digest_string first_hash)) in
+      Hash second_hash
 
     let compute_cstruct cs =
       compute_bigarray (Cstruct.to_bigarray cs)
 
     let compute_string data =
-      let data = Bytes.unsafe_of_string_promise_no_mutation data in
-      Hash (Bytes.unsafe_to_string (H2.Bytes.digest (H1.Bytes.digest data)))
+      let first_hash = H1.(to_raw_string (digest_string data)) in
+      let second_hash = H2.(to_raw_string (digest_string first_hash)) in
+      Hash second_hash
 
     let compute_concat (Hash h1) (Hash h2) =
       compute_string (h1 ^ h2)
@@ -166,10 +168,11 @@ module Hash256 : HASH = Hash (Digestif.SHA256) (Digestif.SHA256)
 
 module Chksum = struct
   let compute cs =
-    let open Cstruct in
-    let data = to_bigarray cs in
-    Digestif.SHA256.Bigstring.(digest (digest data)) |>
-    of_bigarray |> fun cs -> sub cs 0 4 |> to_string
+    let data = Cstruct.to_bigarray cs in
+    let open Digestif.SHA256 in
+    let first_hash = to_raw_string (digest_bigstring data) in
+    let second_hash = to_raw_string (digest_string first_hash) in
+    String.sub second_hash 0 4
 
   let compute' cs_start cs_end =
     let size = cs_end.Cstruct.off - cs_start.Cstruct.off in
@@ -346,10 +349,7 @@ module Bitv = struct
 end
 
 module Crypto = struct
-  let sha256 s =
-    Bytes.unsafe_of_string_promise_no_mutation s |>
-    Digestif.SHA256.Bytes.digest |> fun b ->
-    Bytes.unsafe_to_string ~no_mutation_while_string_reachable:b
+  let sha256 s = Digestif.SHA256.(to_raw_string (digest_string s))
 end
 
 let c = (module Crypto : Base58.CRYPTO)
