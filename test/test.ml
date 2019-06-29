@@ -2,7 +2,7 @@ open Bitcoin
 
 let assert_equal a b = assert (a = b)
 
-module Util = struct
+module TestUtil = struct
   open Util
 
   let verify_size () =
@@ -26,7 +26,26 @@ let testTx =
         6a5f01ffffffff01f0ca052a010000001976a914cbc20a7664f2f69e\
         5355aa427045bc15e7c6c77288ac00000000"
 
-module Script = struct
+let hex = Alcotest.testable Hex.pp (=)
+
+let cstruct = Alcotest.testable Cstruct.hexdump_pp Cstruct.equal
+
+module TestScript = struct
+  let script = Alcotest.testable Script.pp (=)
+  let scripts = List.map Cstruct.of_hex [
+      "004730440220689033c6b759eafaeb2cec9840889b11d91bbd5c0bf7ca1cc5c1aeb472d6ef830220031592f971bf2e7e28d61b8211e1cbdac2fb2d845c5e4966051525e585bedbc9014830450221009427f4b53eae2b422985a719d6d4a7ffd855d05b5bac30721576165191f6bd4102204390383f80df68bd6f235b21a04c03190a608e73f417ae9432bb19ce081fc348014c69522102ab6a688dac39dbf7720e8acc35dd60c9859ac9fe028153bb86cbcd49efe5298a2102afec872249e4cb6d7defa91d2bacba96124acb35ace1f1e791e216381abace9721039b35123f8e66a2f226230d4fa59fb6e6c5c0a5195f5d404a72b73566e08fcb5753ae" ;
+    ]
+
+  let round () =
+    List.iter begin fun cs ->
+      let s, _ = Script.of_cstruct cs in
+      Format.eprintf "%a@." Script.pp s ;
+      let cs' = Script.serialize s in
+      let s',_ = Script.of_cstruct cs' in
+      Alcotest.check script "type equality" s s' ;
+      Alcotest.check cstruct "string equality" cs cs'
+    end scripts
+
   open Script
 
   let check_opcode i =
@@ -42,14 +61,38 @@ module Script = struct
 
   let runtest = [
     "Opcode.{of,to}_int", `Quick, test_opcodes ;
+    "trip", `Quick, round ;
   ]
 end
 
-module Transaction = struct
+module TestTransaction = struct
   open Protocol
 
+  let transaction =
+    Alcotest.testable Transaction.pp (=)
+
+  let hash256 =
+    let open Util.Hash256 in
+    Alcotest.testable pp equal
+
+  let txs = [
+    Util.Hash256.of_hex_rpc (`Hex "0ae0a4865e68a12d4a54c8293329fd8a56ff2a2c72167a7aa828d8f1b68f4367"),
+    `Hex "0100000001b5b6d3c4cbe2152001da0fe745202b5ae1676bf5616907c2b2661ea8a928f75b00000000fdfd00004730440220689033c6b759eafaeb2cec9840889b11d91bbd5c0bf7ca1cc5c1aeb472d6ef830220031592f971bf2e7e28d61b8211e1cbdac2fb2d845c5e4966051525e585bedbc9014830450221009427f4b53eae2b422985a719d6d4a7ffd855d05b5bac30721576165191f6bd4102204390383f80df68bd6f235b21a04c03190a608e73f417ae9432bb19ce081fc348014c69522102ab6a688dac39dbf7720e8acc35dd60c9859ac9fe028153bb86cbcd49efe5298a2102afec872249e4cb6d7defa91d2bacba96124acb35ace1f1e791e216381abace9721039b35123f8e66a2f226230d4fa59fb6e6c5c0a5195f5d404a72b73566e08fcb5753aeffffffff02400d0300000000001976a914e825af66403780479d8bfa4cf2e956623ed7f34a88acb3545c020000000017a91471c6a5ec5d76727767e3da0ac36e1f13db459f268700000000" ;
+  ]
+
+  let trip () =
+    List.iter begin fun (h, tx_hex) ->
+      let t = Transaction.of_hex tx_hex in
+      let h' = Transaction.hash256 t in
+      Alcotest.(check hash256 "hash" h h') ;
+      let tx_hex' = Transaction.to_hex t in
+      let t' = Transaction.of_hex tx_hex' in
+      Alcotest.check transaction "trip_t" t t' ;
+      Alcotest.(check hex "trip_t_string" tx_hex tx_hex')
+    end txs
+
   let test_transaction () =
-    let print_tx ((`Hex tx_hex) as tx) =
+    let print_tx ((`Hex _tx_hex) as tx) =
       let tx_cstruct = Hex.to_cstruct tx in
       let tx, _ = Transaction.of_cstruct tx_cstruct in
       let len = Transaction.size tx in
@@ -66,25 +109,26 @@ module Transaction = struct
     List.iter print_tx (rawTx :: rawPrevTxs)
 
   let runtest = [
+    "trip", `Quick, trip ;
     "Transaction.of_cstruct", `Quick, test_transaction ;
   ]
 end
 
-module Wallet = struct
-  let test_keyPath_of_string () =
-    let open Wallet.KeyPath in
-    let kp = of_string_exn "44'/1'/0'/0/0" in
-    assert_equal kp [to_hardened 44l; to_hardened 1l; to_hardened 0l; 0l; 0l]
-
-  let runtest = [
-    "KeyPath.of_string", `Quick, test_keyPath_of_string ;
-  ]
-end
+(* module Wallet = struct
+ *   let test_keyPath_of_string () =
+ *     let open Wallet.KeyPath in
+ *     let kp = of_string_exn "44'/1'/0'/0/0" in
+ *     assert_equal kp [to_hardened 44l; to_hardened 1l; to_hardened 0l; 0l; 0l]
+ * 
+ *   let runtest = [
+ *     "KeyPath.of_string", `Quick, test_keyPath_of_string ;
+ *   ]
+ * end *)
 
 let () =
   Alcotest.run "bitcoin" [
-    "Util", Util.runtest ;
-    "Script", Script.runtest ;
-    "Transaction", Transaction.runtest ;
-    "Wallet", Wallet.runtest ;
+    "Util", TestUtil.runtest ;
+    "Script", TestScript.runtest ;
+    "Transaction", TestTransaction.runtest ;
+    (* "Wallet", Wallet.runtest ; *)
   ]

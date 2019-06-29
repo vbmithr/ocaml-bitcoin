@@ -3,9 +3,6 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
-open Base
-module Format = Caml.Format
-
 val c_string_of_cstruct : Cstruct.t -> string
 val bytes_with_msg : len:int -> string -> String.t
 
@@ -32,8 +29,9 @@ end
 
 module type HASH = sig
   type t = private Hash of string [@@deriving sexp]
-  include Comparable.S with type t := t
-  val hash : t -> int
+
+  val compare : t -> t -> int
+  val equal : t -> t -> bool
   val length : int
 
   val empty : t
@@ -102,6 +100,16 @@ module ObjList : sig
     Cstruct.t -> 'a list -> f:(Cstruct.t -> 'a -> Cstruct.t) -> Cstruct.t
 end
 
+module ObjArray : sig
+  val size : 'a array -> f:('a -> int) -> int
+
+  val of_cstruct :
+    Cstruct.t -> f:(Cstruct.t -> 'a * Cstruct.t) -> 'a array * Cstruct.t
+
+  val to_cstruct :
+    Cstruct.t -> 'a array -> f:(Cstruct.t -> 'a -> Cstruct.t) -> Cstruct.t
+end
+
 module Bitv : sig
   include module type of Bitv with type t = Bitv.t
 
@@ -116,3 +124,7 @@ end
 
 module Crypto : Base58.CRYPTO
 val c : (module Base58.CRYPTO)
+
+val context : Libsecp256k1.External.Context.t
+(** [context] is a [secp256k1] context initialized for signind and
+    verifying. *)

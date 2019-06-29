@@ -4,6 +4,7 @@
   ---------------------------------------------------------------------------*)
 
 open Util
+open Libsecp256k1.External
 
 module Header : sig
   type t = {
@@ -40,8 +41,8 @@ module Outpoint : sig
     i : int ;
   } [@@deriving sexp]
 
-  val pp : Format.formatter -> t -> unit
-  val show : t -> string
+  (* val pp : Format.formatter -> t -> unit
+   * val show : t -> string *)
 
   val create : Hash256.t -> int -> t
 
@@ -71,6 +72,9 @@ module TxIn : sig
   val size : t -> int
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
+
+  val remove_script : t -> t
+  (** [remove_script t] is [t] with [t.script] set to [[]]. *)
 end
 
 module TxOut : sig
@@ -106,17 +110,21 @@ module Transaction : sig
 
   type t = {
     version : int ;
-    inputs : TxIn.t list ;
-    outputs : TxOut.t list ;
+    inputs : TxIn.t array ;
+    outputs : TxOut.t array ;
     lock_time : LockTime.t ;
   } [@@deriving sexp]
+
+  val nb_inputs : t -> int
+  val nb_outputs : t -> int
 
   val pp : Format.formatter -> t -> unit
   val show : t -> string
 
   val create :
     ?version:int -> ?lock_time:LockTime.t ->
-    inputs:TxIn.t list -> outputs:TxOut.t list -> unit -> t
+    inputs:TxIn.t array ->
+    outputs:TxOut.t array -> unit -> t
 
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
@@ -126,6 +134,30 @@ module Transaction : sig
 
   val size : t -> int
   val hash256 : t -> Hash256.t
+
+  type sighash =
+    | All
+    | None
+    | Single
+    | AllAny
+    | NoneAny
+    | SingleAny
+
+  val int_of_sighash : sighash -> int
+
+  val sign :
+    ?prev_out_script:Script.t ->
+    t -> int -> Key.secret Key.t -> sighash -> Cstruct.t
+    (** [sign ?prev_out_script t i sk sighash] is the endorsement of
+        [t] by input [i], using secret key [sk] and sighash
+        [sighash]. If [prev_out_script] is provided, it is used as the
+        script for the [i]'s input, otherwise [i]'s input script is
+        left as-is. *)
+
+  val sign_bch :
+    ?prev_out_script:Script.t ->
+    t -> int -> Key.secret Key.t -> sighash -> Cstruct.t
+    (** See above, but for Bitcoin Cash. *)
 end
 
 module Block : sig

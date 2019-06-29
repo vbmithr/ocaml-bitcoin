@@ -3,18 +3,19 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
-open Base
+open Sexplib.Std
 open Util
+open Libsecp256k1.External
 module CS = Bitcoin_cstruct
 
 module Header = struct
   type t = {
-    version : Int32.t ;
+    version : int32 ;
     prev_block : Hash256.t ;
     merkle_root : Hash256.t ;
     timestamp : Timestamp.t ;
-    bits : Int32.t ;
-    nonce : Int32.t ;
+    bits : int32 ;
+    nonce : int32 ;
   } [@@deriving sexp]
 
   let genesis = {
@@ -59,8 +60,8 @@ module Header = struct
     let _ = to_cstruct cs t in
     Hash256.compute_cstruct cs
 
-  let compare = Caml.Pervasives.compare
-  let equal = Caml.Pervasives.(=)
+  let compare = Pervasives.compare
+  let equal = Pervasives.(=)
 
   (* let hash t = *)
   (*   let Hash256.Hash s = hash256 t in *)
@@ -90,13 +91,13 @@ module Outpoint = struct
   let of_cstruct cs =
     let open CS.Outpoint in
     let hash, _ = get_t_hash cs |> Hash256.of_cstruct in
-    let i = get_t_index cs |> Int32.to_int_exn in
+    let i = get_t_index cs |> Int32.to_int in
     { hash ; i }, Cstruct.shift cs sizeof_t
 
   let to_cstruct cs { hash = Hash payload ; i } =
     let open CS.Outpoint in
     set_t_hash payload 0 cs ;
-    set_t_index cs (Int32.of_int_exn i) ;
+    set_t_index cs (Int32.of_int i) ;
     Cstruct.shift cs size
 end
 
@@ -104,7 +105,7 @@ module TxIn = struct
   type t = {
     prev_out : Outpoint.t ;
     script : Script.t ;
-    seq : Int32.t ;
+    seq : int32 ;
   } [@@deriving sexp]
 
   let pp ppf t =
@@ -117,7 +118,7 @@ module TxIn = struct
     let prev_out = Outpoint.create prev_out_hash prev_out_i in
     { prev_out ; script ; seq }
 
-  let size { script } =
+  let size { script ; _ } =
     let scriptsize = Script.size script in
     let scriptsizesize = CompactSize.(of_int scriptsize |> size) in
     Outpoint.size + scriptsizesize + scriptsize + 4
@@ -125,7 +126,7 @@ module TxIn = struct
   let of_cstruct cs =
     let prev_out, cs = Outpoint.of_cstruct cs in
     let scriptsize, cs = CompactSize.of_cstruct_int cs in
-    let script, cs = Script.of_cstruct cs scriptsize in
+    let script, cs = Script.of_cstruct cs ~len:scriptsize in
     let seq = Cstruct.LE.get_uint32 cs 0 in
     { prev_out ; script ; seq }, Cstruct.shift cs 4
 
@@ -136,11 +137,13 @@ module TxIn = struct
     let cs = Script.to_cstruct cs script in
     Cstruct.LE.set_uint32 cs 0 seq ;
     Cstruct.shift cs 4
+
+  let remove_script t = { t with script = [] }
 end
 
 module TxOut = struct
   type t = {
-    value : Int64.t ;
+    value : int64 ;
     script : Script.t ;
   } [@@deriving sexp]
 
@@ -151,7 +154,7 @@ module TxOut = struct
 
   let create ~value ~script = { value ; script }
 
-  let size { script } =
+  let size { script ; _ } =
     let scriptsize = Script.size script in
     let scriptsizesize = CompactSize.(of_int scriptsize |> size) in
     8 + scriptsizesize + scriptsize
@@ -159,7 +162,7 @@ module TxOut = struct
   let of_cstruct cs =
     let value = Cstruct.LE.get_uint64 cs 0 in
     let scriptsize, cs = CompactSize.of_cstruct_int (Cstruct.shift cs 8) in
-    let script, cs = Script.of_cstruct cs scriptsize in
+    let script, cs = Script.of_cstruct cs ~len:scriptsize in
     { value ; script }, cs
 
   let to_cstruct cs { value ; script } =
@@ -180,12 +183,12 @@ module Transaction = struct
     let block height = Block height
 
     let of_int32 i =
-      if Int32.(i < 500_000_000l)
-      then Block (Int32.to_int_exn i)
+      if i < 500_000_000l
+      then Block (Int32.to_int i)
       else Timestamp (Timestamp.of_int32_sec i)
 
     let to_int32 = function
-      | Block n -> Int32.of_int_exn n
+      | Block n -> Int32.of_int n
       | Timestamp ts -> Timestamp.to_int32_sec ts
 
     let of_cstruct cs =
@@ -198,10 +201,13 @@ module Transaction = struct
 
   type t = {
     version : int ;
-    inputs : TxIn.t list ;
-    outputs : TxOut.t list ;
+    inputs : TxIn.t array ;
+    outputs : TxOut.t array ;
     lock_time : LockTime.t ;
   } [@@deriving sexp]
+
+  let nb_inputs { inputs ; _ } = Array.length inputs
+  let nb_outputs { outputs ; _ } = Array.length outputs
 
   let pp ppf t =
     Format.fprintf ppf "%a" Sexplib.Sexp.pp_hum (sexp_of_t t)
@@ -211,22 +217,22 @@ module Transaction = struct
   let create ?(version=1) ?(lock_time=LockTime.block 0) ~inputs ~outputs () =
     { version ; inputs ; outputs ; lock_time }
 
-  let size { inputs ; outputs } =
-    8 + ObjList.(size inputs ~f:TxIn.size + size outputs ~f:TxOut.size)
+  let size { inputs ; outputs ; _ } =
+    8 + ObjArray.(size inputs ~f:TxIn.size + size outputs ~f:TxOut.size)
 
   let of_cstruct cs =
-    let version = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int_exn in
+    let version = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
     let cs = Cstruct.shift cs 4 in
-    let inputs, cs = ObjList.of_cstruct ~f:TxIn.of_cstruct cs in
-    let outputs, cs = ObjList.of_cstruct ~f:TxOut.of_cstruct cs in
+    let inputs, cs = ObjArray.of_cstruct ~f:TxIn.of_cstruct cs in
+    let outputs, cs = ObjArray.of_cstruct ~f:TxOut.of_cstruct cs in
     let lock_time, cs = LockTime.of_cstruct cs in
     { version ; inputs ; outputs ; lock_time }, cs
 
   let to_cstruct cs { version ; inputs ; outputs ; lock_time } =
-    Cstruct.LE.set_uint32 cs 0 (Int32.of_int_exn version) ;
+    Cstruct.LE.set_uint32 cs 0 (Int32.of_int version) ;
     let cs = Cstruct.shift cs 4 in
-    let cs = ObjList.to_cstruct cs inputs ~f:TxIn.to_cstruct in
-    let cs = ObjList.to_cstruct cs outputs ~f:TxOut.to_cstruct in
+    let cs = ObjArray.to_cstruct cs inputs ~f:TxIn.to_cstruct in
+    let cs = ObjArray.to_cstruct cs outputs ~f:TxOut.to_cstruct in
     LockTime.to_cstruct cs lock_time
 
   let to_hex t =
@@ -242,6 +248,59 @@ module Transaction = struct
     let cs = Cstruct.create (size t) in
     let _ = to_cstruct cs t in
     Hash256.compute_cstruct cs
+
+  type sighash =
+    | All
+    | None
+    | Single
+    | AllAny
+    | NoneAny
+    | SingleAny
+
+  let int_of_sighash = function
+    | All -> 0x01
+    | None -> 0x02
+    | Single -> 0x03
+    | AllAny -> 0x81
+    | NoneAny -> 0x82
+    | SingleAny -> 0x83
+
+  let sign ?prev_out_script t idx sk kind =
+    if idx < 0 || idx >= nb_inputs t then
+      invalid_arg (Printf.sprintf "Protocol.Transaction.sign: %d is \
+                                   not a valid input index" idx) ;
+    match kind with
+    | All ->
+      let inputs = Array.mapi begin fun i input ->
+          if i <> idx then
+            TxIn.remove_script input
+          else match prev_out_script with
+            | None -> input
+            | Some script -> { input with script = script }
+        end t.inputs in
+      let t = { t with inputs = inputs } in
+      let cs = Cstruct.create ((size t) + 1) in
+      let cs = to_cstruct cs t in
+      Cstruct.set_uint8 cs 0 (int_of_sighash kind) ;
+      let Util.Hash256.Hash h, _ = Util.Hash256.of_cstruct cs in
+      let signature =
+        Sign.sign_exn Util.context ~sk (Bigstring.of_string h) in
+      let signature_bytes =
+        Sign.to_bytes ~der:true Util.context signature in
+      let signature_length = Bigstring.length signature_bytes in
+      let signature_bytes_final =
+        Bigstring.create (signature_length + 1) in
+      Bigstring.blit
+        signature_bytes 0 signature_bytes_final 0 signature_length ;
+      Bigstring.set signature_bytes_final signature_length '\x01' ;
+      Cstruct.of_bigarray signature_bytes_final
+    | _ ->
+      invalid_arg "Protocol.Transaction.sign: signature type \
+                   unsupported"
+
+  let sign_bch ?prev_out_script t idx sk kind =
+    ignore (prev_out_script, t, idx, sk, kind) ;
+    invalid_arg "Protocol.Transaction.sign_bch: unsupported"
 end
 
 module Block = struct

@@ -3,16 +3,22 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
-open Base
-module Format = Caml.Format
+let string_rev s =
+  let len = String.length s in
+  let r = Bytes.create len in
+  for i = 0 to len - 1 do
+    Bytes.set r i (String.get s (len - 1 - i))
+  done ;
+  Bytes.unsafe_to_string r
 
 let c_string_of_cstruct cs =
   let str = Cstruct.to_string cs in
-  String.(sub str 0 (index_exn str '\x00'))
+  String.(sub str 0 (index str '\x00'))
 
 let bytes_with_msg ~len msg =
   let buf = Bytes.make len '\x00' in
-  Bytes.From_string.(blit msg 0 buf 0 (Int.min (Bytes.length buf - 1) (String.length msg)));
+  Bytes.blit_string msg 0 buf 0
+    (min (Bytes.length buf - 1) (String.length msg));
   Bytes.unsafe_to_string buf
 
 module Bool = struct
@@ -51,97 +57,94 @@ module Timestamp = struct
     | Some s -> s
 
   let of_int32_sec s =
-    of_int_sec (Int32.to_int_exn s)
+    of_int_sec (Int32.to_int s)
 
-  let to_int32_sec s=
-    Int32.of_int_exn (to_int_sec s)
+  let to_int32_sec s =
+    Int32.of_int (to_int_sec s)
 
   let of_int64_sec s =
-    of_int_sec (Int64.to_int_exn s)
+    of_int_sec (Int64.to_int s)
 
   let to_int64_sec s =
-    Int64.of_int_exn (to_int_sec s)
+    Int64.of_int (to_int_sec s)
 
   (* let of_int64 i = *)
   (* let to_int64 t = Int64.of_float (Ptime.to_float_s t) *)
 
-  let of_int32 i =
-    match Int32.to_float i |> Ptime.of_float_s with
-    | None -> invalid_arg "Timestamp.of_int64"
-    | Some ts -> ts
-
-  let to_int32 t = Int32.of_float (Ptime.to_float_s t)
+  (* let of_int32 i =
+   *   match Int32.to_float i |> Ptime.of_float_s with
+   *   | None -> invalid_arg "Timestamp.of_int64"
+   *   | Some ts -> ts
+   * 
+   * let to_int32 t = Int32.of_float (Ptime.to_float_s t) *)
 
   include Ptime_clock
 end
 
 module Hash (H2 : Digestif.S) (H1 : Digestif.S) = struct
-  module T = struct
-    type t = Hash of string
+  type t = Hash of string
 
-    let hash (Hash s) = String.hash s
-    let compare (Hash a) (Hash b) = String.compare a b
+  let compare (Hash a) (Hash b) = String.compare a b
+  let equal (Hash a) (Hash b) = String.equal a b
 
-    let length = H2.digest_size
+  let length = H2.digest_size
 
-    let of_string s =
-      if String.length s <> length then
-        invalid_arg (Printf.sprintf "Hash.of_string: length must be %d" length)
-      else Hash s
+  let of_string s =
+    if String.length s <> length then
+      invalid_arg (Printf.sprintf "Hash.of_string: length must be %d" length)
+    else Hash s
 
-    let empty = of_string (String.make length '\x00')
-    let of_hex_internal h = of_string (Hex.to_string h)
+  let empty = of_string (String.make length '\x00')
+  let of_hex_internal h = of_string (Hex.to_string h)
 
-    let of_hex_rpc h =
-      Hex.to_string h |> String.rev |> of_string
+  let of_hex_rpc h =
+    Hex.to_string h |> string_rev |> of_string
 
-    let to_cstruct cs (Hash s) =
-      Cstruct.blit_from_string s 0 cs 0 length ;
-      Cstruct.shift cs length
+  let to_cstruct cs (Hash s) =
+    Cstruct.blit_from_string s 0 cs 0 length ;
+    Cstruct.shift cs length
 
-    let to_string (Hash s) = s
+  let to_string (Hash s) = s
 
-    let pp ppf (Hash s) =
-      let `Hex s_hex = Hex.of_string (String.rev s) in
-      Format.fprintf ppf "%s" s_hex
+  let pp ppf (Hash s) =
+    let `Hex s_hex = Hex.of_string (string_rev s) in
+    Format.fprintf ppf "%s" s_hex
 
-    let show t =
-      Format.asprintf "%a" pp t
+  let show t =
+    Format.asprintf "%a" pp t
 
-    let sexp_of_t t =
-      Sexplib.Std.sexp_of_string (show t)
+  let sexp_of_t t =
+    Sexplib.Std.sexp_of_string (show t)
 
-    let t_of_sexp sexp =
-      of_hex_rpc (`Hex (Sexplib.Std.string_of_sexp sexp))
+  let t_of_sexp sexp =
+    of_hex_rpc (`Hex (Sexplib.Std.string_of_sexp sexp))
 
-    let of_cstruct cs =
-      Hash (Cstruct.copy cs 0 length),
-      Cstruct.shift cs length
+  let of_cstruct cs =
+    Hash (Cstruct.copy cs 0 length),
+    Cstruct.shift cs length
 
-    let compute_bigarray data =
-      let first_hash = H1.(to_raw_string (digest_bigstring data)) in
-      let second_hash = H2.(to_raw_string (digest_string first_hash)) in
-      Hash second_hash
+  let compute_bigarray data =
+    let first_hash = H1.(to_raw_string (digest_bigstring data)) in
+    let second_hash = H2.(to_raw_string (digest_string first_hash)) in
+    Hash second_hash
 
-    let compute_cstruct cs =
-      compute_bigarray (Cstruct.to_bigarray cs)
+  let compute_cstruct cs =
+    compute_bigarray (Cstruct.to_bigarray cs)
 
-    let compute_string data =
-      let first_hash = H1.(to_raw_string (digest_string data)) in
-      let second_hash = H2.(to_raw_string (digest_string first_hash)) in
-      Hash second_hash
+  let compute_string data =
+    let first_hash = H1.(to_raw_string (digest_string data)) in
+    let second_hash = H2.(to_raw_string (digest_string first_hash)) in
+    Hash second_hash
 
-    let compute_concat (Hash h1) (Hash h2) =
-      compute_string (h1 ^ h2)
-  end
-  include T
-  include Comparable.Make(T)
+  let compute_concat (Hash h1) (Hash h2) =
+    compute_string (h1 ^ h2)
 end
 
 module type HASH = sig
   type t = private Hash of string [@@deriving sexp]
-  include Comparable.S with type t := t
-  val hash : t -> int
+
+  val compare : t -> t -> int
+  val equal : t -> t -> bool
   val length : int
 
   val empty : t
@@ -202,34 +205,34 @@ module CompactSize = struct
   let size = function
     | Int n when n < 0xFD -> 1
     | Int n when n < 0x10000 -> 3
-    | Int n -> 5
-    | Int32 n -> 5
-    | Int64 n -> 9
+    | Int _ -> 5
+    | Int32 _ -> 5
+    | Int64 _ -> 9
 
-  let read ?(pos=0) buf =
-    let open EndianString.LittleEndian in
-    match get_uint8 buf pos with
-    | 0xFD -> Int (get_uint16 buf (pos+1))
-    | 0xFE -> Int32 (get_int32 buf (pos+1))
-    | 0xFF -> Int64 (get_int64 buf (pos+1))
-    | n -> Int n
-
-  let write ?(pos=0) buf t =
-    let open EndianString.LittleEndian in
-    match t with
-    | Int n when n < 0xFD -> set_int8 buf pos n
-    | Int n when n < 0x10000 ->
-      set_int8 buf pos 0xFD ;
-      set_int16 buf (pos+1) n
-    | Int n ->
-      set_int8 buf pos 0xFE ;
-      set_int32 buf (pos+1) (Int32.of_int_exn n)
-    | Int32 n ->
-      set_int8 buf pos 0xFE ;
-      set_int32 buf (pos+1) n
-    | Int64 n ->
-      set_int8 buf pos 0xFF ;
-      set_int64 buf (pos+1) n
+  (* let read ?(pos=0) buf =
+   *   let open EndianString.LittleEndian in
+   *   match get_uint8 buf pos with
+   *   | 0xFD -> Int (get_uint16 buf (pos+1))
+   *   | 0xFE -> Int32 (get_int32 buf (pos+1))
+   *   | 0xFF -> Int64 (get_int64 buf (pos+1))
+   *   | n -> Int n
+   * 
+   * let write ?(pos=0) buf t =
+   *   let open EndianString.LittleEndian in
+   *   match t with
+   *   | Int n when n < 0xFD -> set_int8 buf pos n
+   *   | Int n when n < 0x10000 ->
+   *     set_int8 buf pos 0xFD ;
+   *     set_int16 buf (pos+1) n
+   *   | Int n ->
+   *     set_int8 buf pos 0xFE ;
+   *     set_int32 buf (pos+1) (Int32.of_int n)
+   *   | Int32 n ->
+   *     set_int8 buf pos 0xFE ;
+   *     set_int32 buf (pos+1) n
+   *   | Int64 n ->
+   *     set_int8 buf pos 0xFF ;
+   *     set_int64 buf (pos+1) n *)
 
   let of_cstruct cs =
     let open Cstruct in
@@ -242,8 +245,8 @@ module CompactSize = struct
   let of_cstruct_int cs =
     match of_cstruct cs with
     | Int i, cs -> i, cs
-    | Int32 i, cs -> Int32.to_int_exn i, cs
-    | Int64 i, cs -> Int64.to_int_exn i, cs
+    | Int32 i, cs -> Int32.to_int i, cs
+    | Int64 i, cs -> Int64.to_int i, cs
 
   let to_cstruct cs t =
     let open Cstruct in
@@ -257,7 +260,7 @@ module CompactSize = struct
       shift cs 3
     | Int n ->
       set_uint8 cs 0 0xFE ;
-      LE.set_uint32 cs 1 (Int32.of_int_exn n) ;
+      LE.set_uint32 cs 1 (Int32.of_int n) ;
       shift cs 5
     | Int32 n ->
       set_uint8 cs 0 0xFE ;
@@ -283,29 +286,48 @@ module VarString = struct
     Cstruct.shift cs len
 end
 
-module ObjList = struct
+module type COLL = sig
+  type 'a t
+
+  val of_list : 'a list -> 'a t
+  val length : 'a t -> int
+  val fold_left : f:('a -> 'b -> 'a) -> init:'a -> 'b t -> 'a
+end
+
+module ObjColl(C: COLL) = struct
   let size elts ~f =
-    List.fold_left elts
-      ~init:(CompactSize.size (Int (List.length elts)))
+    C.fold_left elts
+      ~init:(CompactSize.size (Int (C.length elts)))
       ~f:(fun a e -> a + f e)
 
   let rec inner obj_of_cstruct acc cs = function
-    | 0 -> List.rev acc, cs
+    | 0 -> C.of_list (List.rev acc), cs
     | n ->
       let obj, cs = obj_of_cstruct cs in
-      inner obj_of_cstruct (obj :: acc) cs (Caml.pred n)
+      inner obj_of_cstruct (obj :: acc) cs (pred n)
 
   let of_cstruct cs ~f =
     let nb_objs, cs = CompactSize.of_cstruct_int cs in
     inner f [] cs nb_objs
 
   let to_cstruct cs objs ~f =
-    let len = List.length objs in
+    let len = C.length objs in
     let cs = CompactSize.to_cstruct_int cs len in
-    Base.List.fold_left objs ~init:cs ~f:begin fun cs o ->
+    C.fold_left objs ~init:cs ~f:begin fun cs o ->
       f cs o
     end
 end
+
+module ObjList = ObjColl(struct
+    type 'a t = 'a list
+    let of_list a = a
+    include ListLabels
+  end)
+
+module ObjArray = ObjColl(struct
+    type 'a t = 'a array
+    include ArrayLabels
+  end)
 
 module Bitv = struct
   open Sexplib.Std
@@ -353,3 +375,5 @@ module Crypto = struct
 end
 
 let c = (module Crypto : Base58.CRYPTO)
+let context =
+  Libsecp256k1.External.Context.create ()

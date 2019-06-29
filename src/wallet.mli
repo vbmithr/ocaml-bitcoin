@@ -1,8 +1,8 @@
 open Libsecp256k1.External
 
-module Private : sig
-  val generate : Context.t -> Key.secret Key.t
-end
+(* module Private : sig
+ *   val generate : Context.t -> Key.secret Key.t
+ * end *)
 
 module WIF : sig
   type t = private {
@@ -18,15 +18,16 @@ module WIF : sig
     ?testnet:bool -> ?compress:bool -> Key.secret Key.t -> t
 
   val to_base58 : Context.t -> t -> Base58.Bitcoin.t
-  val of_base58 : Context.t -> Base58.Bitcoin.t -> t
+  val of_base58 : Context.t -> Base58.Bitcoin.t -> (t, string) result
 end
 
 module Address : sig
   val of_wif : Context.t -> WIF.t -> Base58.Bitcoin.t
   val of_pubkey :
-    ?testnet:bool -> ?compress:bool ->
+    ?version:Base58.Bitcoin.version -> ?compress:bool ->
     Context.t -> Key.public Key.t -> Base58.Bitcoin.t
-  val of_script : ?testnet:bool -> Script.t -> Base58.Bitcoin.t
+  val of_script :
+    ?version:Base58.Bitcoin.version -> Script.t -> Base58.Bitcoin.t
   val to_script : Base58.Bitcoin.t -> Script.t
 end
 
@@ -48,19 +49,25 @@ end
 module Bip44 : sig
   module Purpose : sig
     type t = Bip44
+
+    val pp : Format.formatter -> t -> unit
   end
 
   module CoinType : sig
     type t =
       | Bitcoin
       | Bitcoin_testnet
+
+    val pp : Format.formatter -> t -> unit
   end
 
   module Chain : sig
     type t =
       | External
       | Internal
-  end
+
+    val pp : Format.formatter -> t -> unit
+end
 
   type t = {
     purpose : Purpose.t ;
