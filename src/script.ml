@@ -364,7 +364,7 @@ end
 module Element = struct
   type t =
     | O of Opcode.t
-    | D of Cstruct.t
+    | D of Cstruct_sexp.t
   [@@deriving sexp]
 
   let op_size_prefix buf =
