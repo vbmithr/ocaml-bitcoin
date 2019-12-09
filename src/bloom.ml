@@ -1,4 +1,4 @@
-open Base
+open Sexplib.Std
 open Murmur3.Murmur_cstruct
 open Util
 
@@ -10,17 +10,17 @@ type t = {
   filter : Bitv.t ;
   len : int ;
   nb_funcs : int ;
-  tweak : Int32.t ;
+  tweak : int32 ;
 } [@@deriving sexp]
 
-let filter_len { filter } =
-  Bitv.length filter / 8
+(* let filter_len { filter; _ } =
+ *   Bitv.length filter / 8 *)
 
-let to_filter { filter } =
+let to_filter { filter; _ } =
   try Bitv.to_string_le filter with _ ->
     invalid_arg "Bloom.to_string"
 
-let pp ppf t =
+let pp_hex ppf t =
   let `Hex filter_hex = Hex.of_string (to_filter t) in
   Caml.Format.fprintf ppf "%s" filter_hex
 
@@ -54,9 +54,9 @@ let create n p tweak =
 let reset t =
   { t with filter = Bitv.(create (length t.filter) false) }
 
-let hash { filter ; tweak ; len } data func_id =
+let hash { filter ; tweak ; len; _ } data func_id =
   let res = Cstruct.create 4 in
-  let seed = Int32.(of_int_exn func_id * seed_mult + tweak) in
+  let seed = Int32.(add (mul (of_int func_id) seed_mult) tweak) in
   murmur_x86_32 res data seed ;
   let open Stdint in
   let res = Uint32.of_int32 (Cstruct.LE.get_uint32 res 0) in
@@ -64,17 +64,16 @@ let hash { filter ; tweak ; len } data func_id =
   let i = Uint32.(rem res filter_size |> to_int) in
   Bitv.set filter i true
 
-let add ({ nb_funcs } as t) data =
+let add ({ nb_funcs; _ } as t) data =
   for i = 0 to nb_funcs - 1 do
     hash t data i
   done
 
 let mem t data =
   let empty = reset t in
-  let open Int32 in
   add empty data ;
   let bitv_and = Bitv.bw_and empty.filter t.filter in
-  Caml.Pervasives.(=) bitv_and empty.filter
+  Stdlib.(=) bitv_and empty.filter
 
 let _ =
   let data_hex =
@@ -85,5 +84,5 @@ let _ =
   let filter = to_filter bloom in
   let filter2 = of_filter filter bloom.nb_funcs bloom.tweak in
   let `Hex msg = Hex.of_string filter in
-  Caml.Printf.printf "%s\n%!" msg ;
-  assert Caml.Pervasives.(filter2 = bloom)
+  Printf.printf "%s\n%!" msg ;
+  assert (filter2 = bloom)

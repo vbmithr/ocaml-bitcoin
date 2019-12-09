@@ -33,6 +33,7 @@ module type HASH = sig
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val length : int
+  val hash : t -> int
 
   val empty : t
   val of_hex_internal : Hex.t -> t
@@ -51,6 +52,10 @@ module type HASH = sig
 
   val to_string : t -> string
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
+
+  module Set : Set.S with type elt = t
+  module Map : Map.S with type key = t
+  module Table : Hashtbl.S with type key = t
 end
 
 module Hash160 : HASH

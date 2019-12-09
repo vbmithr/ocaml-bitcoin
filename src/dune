@@ -2,8 +2,9 @@
  (name bitcoin)
  (public_name bitcoin)
  (preprocess (pps ppx_sexp_conv))
- (modules util protocol script wallet)
+ (modules util protocol script wallet bloom p2p)
  (libraries
+   fmt
    cstruct-sexp
    sexplib
    rresult
@@ -12,6 +13,7 @@
    stdint
    ocplib-endian
    ipaddr
+   ipaddr-sexp
    ptime
    ptime.clock.os
    cstruct

@@ -5,6 +5,8 @@ type t = private {
   tweak : Int32.t ;
 } [@@deriving sexp]
 
+val pp_hex : t Fmt.t
+
 val create : int -> float -> Int32.t -> t
 (** [create max_elts false_pos_rate tweak] is a bloom filter
     configured to hold a maximum of [max_elts] for a false positive

@@ -60,8 +60,8 @@ module Header = struct
     let _ = to_cstruct cs t in
     Hash256.compute_cstruct cs
 
-  let compare = Pervasives.compare
-  let equal = Pervasives.(=)
+  let compare = Stdlib.compare
+  let equal = Stdlib.(=)
 
   (* let hash t = *)
   (*   let Hash256.Hash s = hash256 t in *)

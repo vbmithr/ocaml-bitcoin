@@ -5,16 +5,14 @@ open Bitcoin.Protocol
 open Bitcoin.P2p
 open Log.Global
 
-module HTable = Hashtbl.Make(Hash256)
-
-let headers = HTable.create ()
+let headers = Hash256.Table.create 13
 let best_hh = ref Header.genesis_hash
 
 let buf = Cstruct.create 4096
 let network = ref Network.Mainnet
 
 let my_addresses =
-  Base58.Bitcoin.of_string_exn "mjVrE2kfz42sLR5gFcfvG6PwbAjhpmsKnn"
+  Base58.Bitcoin.of_string_exn c "mjVrE2kfz42sLR5gFcfvG6PwbAjhpmsKnn"
 
 let write_cstruct w (cs : Cstruct.t) =
   (* debug "write_cstruct %d %d" cs.off cs.len ; *)
@@ -44,15 +42,13 @@ let get_data w invs =
   write_cstruct2 w buf cs ;
   debug "Sent GetData"
 
-let process_error w header =
+let process_error _w header =
   sexp ~level:`Error (MessageHeader.sexp_of_t header)
 
 let process_msg w msg =
   (* sexp ~level:`Debug (Message.sexp_of_t msg) ; *)
   match msg with
-  | Message.Version { version; services; timestamp; recv_services; recv_ipaddr; recv_port;
-                      trans_services; trans_ipaddr; trans_port; nonce; user_agent; start_height;
-                      relay } ->
+  | Message.Version _ ->
     let cs = Message.to_cstruct ~network:!network buf VerAck in
     write_cstruct2 w buf cs ;
     debug "Sent VerAck"
@@ -86,7 +82,7 @@ let process_msg w msg =
     let cs = Message.to_cstruct ~network:!network buf (Pong i) in
     write_cstruct2 w buf cs ;
     debug "Sent Pong" ;
-  | Pong i ->
+  | Pong _ ->
     debug "Got Pong!" ;
   | GetBlocks _ ->
     debug "Got GetBlocks!"
@@ -99,13 +95,13 @@ let process_msg w msg =
   | MerkleBlock mblock ->
     debug "MerkleBlock %s" (Sexplib.Sexp.to_string_hum (MerkleBlock.sexp_of_t mblock))
   | Headers hdrs ->
-    List.iteri hdrs ~f:begin fun i h ->
+    List.iteri hdrs ~f:begin fun _i h ->
       let hh = Header.hash256 h in
       (* debug "Got block header %d: %s" i (Hash256.show hh) ; *)
-      HTable.set headers hh h ;
+      Hash256.Table.add headers hh h ;
       best_hh := hh
     end ;
-    debug "headers table has %d entries" (HTable.length headers) ;
+    debug "headers table has %d entries" (Hash256.Table.length headers) ;
     if List.length hdrs = 2000 then
       request_hdrs w !best_hh
   | Inv invs ->
@@ -116,7 +112,7 @@ let process_msg w msg =
     debug "Got NotFound!"
   | MemPool ->
     debug "Got MemPool!"
-  | Tx tx ->
+  | Tx _ ->
     debug "Got Tx!"
     (* debug "%s" (Sexplib.Sexp.to_string_hum (Transaction.sexp_of_t tx)) *)
   | FeeFilter fee ->
@@ -140,14 +136,14 @@ let handle_chunk w buf ~pos ~len =
       return (`Consumed (0, `Need msg_size))
     else
       match Message.of_cstruct cs with
-      | Error (Invalid_checksum h), cs ->
+      | Error (Invalid_checksum h), _ ->
         process_error w h ;
         return (`Stop ())
-      | Ok (_, msg), cs ->
+      | Ok (_, msg), _ ->
         process_msg w msg ;
         return (`Consumed (msg_size, `Need_unknown))
 
-let main_loop port s r w =
+let main_loop port _s r w =
   info "Connected!" ;
   let cs = Message.to_cstruct ~network:!network
       buf (Version (Version.create ~recv_port:port ~trans_port:port ())) in
@@ -156,10 +152,10 @@ let main_loop port s r w =
   | `Eof ->
     info "EOF" ;
     Deferred.unit
-  | `Eof_with_unconsumed_data data ->
+  | `Eof_with_unconsumed_data _data ->
     info "EOF with unconsumed data" ;
     Deferred.unit
-  | `Stopped v ->
+  | `Stopped _ ->
     info "Stopped" ;
     Deferred.unit
 
@@ -168,7 +164,7 @@ let set_loglevel = function
   | 3 -> set_level `Debug
   | _ -> ()
 
-let main testnet host port daemon datadir rundir logdir loglevel () =
+let main testnet host port _daemon _datadir _rundir _logdir loglevel () =
   set_loglevel loglevel ;
   if testnet then network := Network.Testnet ;
   let host = match testnet, host with

@@ -3,12 +3,10 @@
    Distributed under the GNU Affero GPL license, see LICENSE.
   ---------------------------------------------------------------------------*)
 
-open Base
 open Util
 open Protocol
 open Sexplib.Std
-
-module Format = Caml.Format
+open StdLabels
 
 module CS = Bitcoin_cstruct
 
@@ -172,7 +170,7 @@ module GetHashes = struct
 
   let of_cstruct cs =
     let open Cstruct in
-    let version = LE.get_uint32 cs 0 |> Int32.to_int_exn in
+    let version = LE.get_uint32 cs 0 |> Int32.to_int in
     let cs = shift cs 4 in
     let nb_hashes, cs = CompactSize.of_cstruct_int cs in
     let hashes, cs = read_hash [] cs nb_hashes in
@@ -180,14 +178,13 @@ module GetHashes = struct
     { version ; hashes ; stop_hash }, cs
 
   let of_cstruct_only_hashes cs =
-    let open Cstruct in
     let nb_hashes, cs = CompactSize.of_cstruct_int cs in
     let hashes, cs = read_hash [] cs nb_hashes in
     hashes, cs
 
   let to_cstruct cs { version; hashes; stop_hash } =
     let open Cstruct in
-    LE.set_uint32 cs 0 (Int32.of_int_exn version) ;
+    LE.set_uint32 cs 0 (Int32.of_int version) ;
     let nb_hashes = List.length hashes in
     let cs = shift cs 4 in
     let cs = CompactSize.to_cstruct_int cs nb_hashes in
@@ -242,7 +239,7 @@ module MessageHeader = struct
     let open CS.MessageHeader in
     let network = get_t_start_string cs |> Network.of_cstruct in
     let msgname = get_t_command_name cs |> MessageName.of_cstruct in
-    let size = get_t_payload_size cs |> Int32.to_int_exn in
+    let size = get_t_payload_size cs |> Int32.to_int in
     let checksum = get_t_checksum cs |> Cstruct.to_string in
     { network ; msgname ; size ; checksum }, Cstruct.shift cs sizeof_t
 
@@ -251,7 +248,7 @@ module MessageHeader = struct
     set_t_start_string (Network.start_string t.network) 0 cs ;
     set_t_command_name
       (MessageName.to_string t.msgname |> bytes_with_msg ~len:12) 0 cs ;
-    set_t_payload_size cs (Int32.of_int_exn t.size) ;
+    set_t_payload_size cs (Int32.of_int t.size) ;
     set_t_checksum t.checksum 0 cs ;
     Cstruct.shift cs sizeof_t
 end
@@ -265,10 +262,10 @@ module Service = struct
 
   let of_int64 v =
     let open Int64 in
-    List.filter_opt [
-      if v land 1L <> 0L then Some Network else None ;
-      if v land 2L <> 0L then Some Getutxo else None ;
-      if v land 4L <> 0L then Some Bloom else None ;
+    List.filter_map ~f:(fun a -> a) [
+      if logand v 1L <> 0L then Some Network else None ;
+      if logand v 2L <> 0L then Some Getutxo else None ;
+      if logand v 4L <> 0L then Some Bloom else None ;
     ]
 
   let to_int64 = function
@@ -279,7 +276,7 @@ module Service = struct
   let to_int64 =
     List.fold_left ~init:0L ~f:begin fun a l ->
       let l = to_int64 l in
-      Int64.(a lor l)
+      Int64.logor a l
     end
 end
 
@@ -289,12 +286,12 @@ module Version = struct
     services : Service.t list ;
     timestamp : Timestamp.t ;
     recv_services : Service.t list ;
-    recv_ipaddr : Ipaddr.V6.t ;
+    recv_ipaddr : Ipaddr_sexp.V6.t ;
     recv_port : int ;
     trans_services : Service.t list ;
-    trans_ipaddr : Ipaddr.V6.t ;
+    trans_ipaddr : Ipaddr_sexp.V6.t ;
     trans_port : int ;
-    nonce : Int64.t ;
+    nonce : int64 ;
     user_agent : string ;
     start_height : int ;
     relay : bool ;
@@ -321,19 +318,19 @@ module Version = struct
 
   let of_cstruct cs =
     let open CS.Version in
-    let version = get_t_version cs |> Int32.to_int_exn in
+    let version = get_t_version cs |> Int32.to_int in
     let services = get_t_services cs |> Service.of_int64 in
     let timestamp = get_t_timestamp cs |> Timestamp.of_int64_sec in
     let recv_services = get_t_recv_services cs |> Service.of_int64 in
-    let recv_ipaddr = get_t_recv_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
+    let recv_ipaddr = get_t_recv_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_octets_exn in
     let recv_port = Cstruct.BE.get_uint16 (get_t_recv_port cs) 0 in
     let trans_services = get_t_trans_services cs |> Service.of_int64 in
-    let trans_ipaddr = get_t_trans_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
+    let trans_ipaddr = get_t_trans_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_octets_exn in
     let trans_port = Cstruct.BE.get_uint16 (get_t_trans_port cs) 0 in
     let nonce = get_t_nonce cs in
     let cs = Cstruct.shift cs sizeof_t in
     let user_agent, cs = VarString.of_cstruct cs in
-    let start_height = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int_exn in
+    let start_height = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
     let relay =
       match Cstruct.get_uint8 cs 4 with
       | exception _ -> true
@@ -347,19 +344,19 @@ module Version = struct
 
   let to_cstruct cs msg =
     let open CS.Version in
-    set_t_version cs (Int32.of_int_exn msg.version) ;
+    set_t_version cs (Int32.of_int msg.version) ;
     set_t_services cs (Service.to_int64 msg.services) ;
     set_t_timestamp cs (Timestamp.to_int64_sec msg.timestamp) ;
     set_t_recv_services cs (Service.to_int64 msg.recv_services) ;
-    set_t_recv_ipaddr (Ipaddr.V6.to_bytes msg.recv_ipaddr) 0 cs ;
+    set_t_recv_ipaddr (Ipaddr.V6.to_octets msg.recv_ipaddr) 0 cs ;
     Cstruct.BE.set_uint16 (get_t_recv_port cs) 0 msg.recv_port ;
     set_t_trans_services cs (Service.to_int64 msg.trans_services) ;
-    set_t_trans_ipaddr (Ipaddr.V6.to_bytes msg.trans_ipaddr) 0 cs ;
+    set_t_trans_ipaddr (Ipaddr.V6.to_octets msg.trans_ipaddr) 0 cs ;
     Cstruct.BE.set_uint16 (get_t_trans_port cs) 0 msg.trans_port ;
     set_t_nonce cs msg.nonce ;
     let cs = Cstruct.shift cs sizeof_t in
     let cs = VarString.to_cstruct cs msg.user_agent in
-    Cstruct.LE.set_uint32 cs 0 (Int32.of_int_exn msg.start_height) ;
+    Cstruct.LE.set_uint32 cs 0 (Int32.of_int msg.start_height) ;
     Cstruct.set_uint8 cs 4 (if msg.relay then 0x01 else 0x00) ;
     Cstruct.shift cs 5
 end
@@ -368,7 +365,7 @@ module Address = struct
   type t = {
     timestamp : Timestamp.t ;
     services : Service.t list ;
-    ipaddr : Ipaddr.V6.t ;
+    ipaddr : Ipaddr_sexp.V6.t ;
     port : int ;
   } [@@deriving sexp]
 
@@ -376,7 +373,7 @@ module Address = struct
     let open CS.Address in
     let timestamp = get_t_timestamp cs |> Timestamp.of_int32_sec in
     let services = get_t_services cs |> Service.of_int64 in
-    let ipaddr = get_t_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_bytes_exn in
+    let ipaddr = get_t_ipaddr cs |> Cstruct.to_string |> Ipaddr.V6.of_octets_exn in
     let port = Cstruct.BE.get_uint16 (get_t_port cs) 0 in
     { timestamp ; services ; ipaddr ; port }, Cstruct.shift cs sizeof_t
 end
@@ -438,7 +435,7 @@ module MerkleBlock = struct
 
   let of_cstruct cs =
     let header, cs = Header.of_cstruct cs in
-    let txn_count = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int_exn in
+    let txn_count = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
     let cs = Cstruct.shift cs 4 in
     let hashes, cs  = GetHashes.of_cstruct_only_hashes cs in
     let flags_len, cs = CompactSize.of_cstruct_int cs in
@@ -452,17 +449,15 @@ module FeeFilter = struct
 end
 
 module FilterAdd = struct
-  type t = string
-
   let of_cstruct cs =
     let nb_bytes, cs = CompactSize.of_cstruct_int cs in
     Cstruct.(sub cs 0 nb_bytes |> to_string, shift cs nb_bytes)
 
-  let to_cstruct cs data =
-    let datalen = String.length data in
-    let cs = CompactSize.to_cstruct_int cs datalen in
-    Cstruct.blit_from_string data 0 cs 0 datalen ;
-    Cstruct.shift cs datalen
+  (* let to_cstruct cs data =
+   *   let datalen = String.length data in
+   *   let cs = CompactSize.to_cstruct_int cs datalen in
+   *   Cstruct.blit_from_string data 0 cs 0 datalen ;
+   *   Cstruct.shift cs datalen *)
 end
 
 module FilterLoad = struct
@@ -490,7 +485,7 @@ module FilterLoad = struct
 
   let of_data
       ?(false_pos_rate=0.0001)
-      ?(tweak=Random.int32 Int32.max_value)
+      ?(tweak=Random.int32 Int32.max_int)
       elts
       ?(nb_elts=List.length elts) flag =
     let filter = Bloom.create nb_elts false_pos_rate tweak in
@@ -500,7 +495,7 @@ module FilterLoad = struct
   let of_cstruct cs =
     let nb_bytes, cs = CompactSize.of_cstruct_int cs in
     let filter, cs = Cstruct.(sub cs 0 nb_bytes |> to_string, shift cs nb_bytes) in
-    let nb_funcs = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int_exn in
+    let nb_funcs = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
     let tweak = Cstruct.LE.get_uint32 cs 4 in
     let flag = Cstruct.get_uint8 cs 8 |> flag_of_int in
     let filter = Bloom.of_filter filter nb_funcs tweak in
@@ -511,7 +506,7 @@ module FilterLoad = struct
     let filter_bytes = Bloom.to_filter filter in
     Cstruct.blit_from_string filter_bytes 0 cs 0 filter.len ;
     let cs = Cstruct.shift cs filter.len in
-    Cstruct.LE.set_uint32 cs 0 (Int32.of_int_exn filter.nb_funcs) ;
+    Cstruct.LE.set_uint32 cs 0 (Int32.of_int filter.nb_funcs) ;
     let cs = Cstruct.shift cs 4 in
     Cstruct.LE.set_uint32 cs 0 filter.tweak ;
     let cs = Cstruct.shift cs 4 in
@@ -548,8 +543,7 @@ module Reject = struct
       | Fee_too_low h -> Format.fprintf ppf "fee too low %a" Hash256.pp h
       | Wrong_blockchain h -> Format.fprintf ppf "wrong blockchain %a" Hash256.pp h
 
-    let show t =
-      Format.asprintf "%a" pp t
+    (* let show t = Format.asprintf "%a" pp t *)
   end
 
   type t = {
@@ -623,7 +617,7 @@ module SendCmpct = struct
   let of_cstruct cs =
     let open CS.SendCmpct in
     let compact = get_t_b cs |> Bool.of_int in
-    let version = get_t_version cs |> Int64.to_int_exn in
+    let version = get_t_version cs |> Int64.to_int in
     { compact ; version }, Cstruct.shift cs sizeof_t
 end
 
@@ -635,8 +629,8 @@ module Message = struct
     | GetAddr
     | Addr of Address.t list
 
-    | Ping of Int64.t
-    | Pong of Int64.t
+    | Ping of int64
+    | Pong of int64
 
     | GetBlocks of GetHashes.t
     | GetData of Inv.t list
@@ -652,7 +646,7 @@ module Message = struct
     | SendHeaders
 
     | Tx of Transaction.t
-    | FeeFilter of Int64.t
+    | FeeFilter of int64
 
     | FilterAdd of string
     | FilterClear

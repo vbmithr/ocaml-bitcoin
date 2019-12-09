@@ -82,10 +82,17 @@ module Timestamp = struct
 end
 
 module Hash (H2 : Digestif.S) (H1 : Digestif.S) = struct
-  type t = Hash of string
+  module T = struct
+    type t = Hash of string
+    let hash = Hashtbl.hash
+    let compare (Hash a) (Hash b) = String.compare a b
+    let equal (Hash a) (Hash b) = String.equal a b
+  end
 
-  let compare (Hash a) (Hash b) = String.compare a b
-  let equal (Hash a) (Hash b) = String.equal a b
+  include T
+  module Set = Set.Make(T)
+  module Map = Map.Make(T)
+  module Table = Hashtbl.Make(T)
 
   let length = H2.digest_size
 
@@ -146,6 +153,7 @@ module type HASH = sig
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val length : int
+  val hash : t -> int
 
   val empty : t
   val of_hex_internal : Hex.t -> t
@@ -164,6 +172,10 @@ module type HASH = sig
 
   val to_string : t -> string
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
+
+  module Set : Set.S with type elt = t
+  module Map : Map.S with type key = t
+  module Table : Hashtbl.S with type key = t
 end
 
 module Hash160 : HASH = Hash (Digestif.RMD160) (Digestif.SHA256)
@@ -319,15 +331,11 @@ module ObjColl(C: COLL) = struct
 end
 
 module ObjList = ObjColl(struct
-    type 'a t = 'a list
-    let of_list a = a
     include ListLabels
+    let of_list a = a
   end)
 
-module ObjArray = ObjColl(struct
-    type 'a t = 'a array
-    include ArrayLabels
-  end)
+module ObjArray = ObjColl(ArrayLabels)
 
 module Bitv = struct
   open Sexplib.Std
