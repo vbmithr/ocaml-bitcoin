@@ -368,7 +368,7 @@ module Element = struct
   [@@deriving sexp]
 
   let op_size_prefix buf =
-    let len = Cstruct.len buf in
+    let len = Cstruct.length buf in
     if len <= 0x4b then
       [ O (Op_pushdata len) ]
     else begin
@@ -383,13 +383,13 @@ module Element = struct
     | O opcode ->
       Opcode.to_cstruct cs opcode
     | D buf ->
-      let len = Cstruct.len buf in
+      let len = Cstruct.length buf in
       Cstruct.blit buf 0 cs 0 len ;
       Cstruct.shift cs len
 
   let length = function
     | O _ -> 1
-    | D cs -> Cstruct.len cs
+    | D cs -> Cstruct.length cs
 end
 
 type t = Element.t list [@@deriving sexp]
@@ -403,7 +403,7 @@ let size elts =
 let read_all cs =
   let open Element in
   let rec inner acc data_len cs =
-    if cs.Cstruct.len = 0 then List.rev acc
+    if Cstruct.length cs = 0 then List.rev acc
     else if cs.len = 0 && data_len <> 0 then
       invalid_arg "Script.read_all: cs too short"
     else if data_len > 0 then
@@ -433,7 +433,7 @@ let read_all cs =
   inner [] 0 cs
 
 let of_cstruct ?(pos=0) ?len cs =
-  let len = match len with None -> Cstruct.len cs | Some l -> l in
+  let len = match len with None -> Cstruct.length cs | Some l -> l in
   read_all (Cstruct.sub cs pos len), Cstruct.shift cs len
 
 let to_cstruct cs elts =
@@ -480,7 +480,7 @@ end
 module Stack = struct
   open Stdint
   let to_int32 cs =
-    match cs.Cstruct.len with
+    match Cstruct.length cs with
     | 0 -> 0l
     | 1 -> Int8.(of_bytes_little_endian (Cstruct.to_bytes cs) 0 |> to_int32)
     | 2 -> Int16.(of_bytes_little_endian (Cstruct.to_bytes cs) 0 |> to_int32)
@@ -664,7 +664,7 @@ module Run = struct
       | O Op_left :: _, _ -> invalid_arg "Run.eval: op_left is disabled"
       | O Op_right :: _, _ -> invalid_arg "Run.eval: op_right is disabled"
       | O Op_size :: rest, v :: stack ->
-        let stacklen = Cstruct.len v |> Int32.of_int |> Stack.of_int32 in
+        let stacklen = Cstruct.length v |> Int32.of_int |> Stack.of_int32 in
         eval_main iflevel (stacklen :: stack) altstack rest
       | O Op_invert :: _, _ -> invalid_arg "Run.eval: op_invert is disabled"
       | O Op_and :: _, _ -> invalid_arg "Run.eval: op_and is disabled"
