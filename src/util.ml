@@ -288,8 +288,8 @@ end
 
 module VarString = struct
   let of_cstruct cs =
-    let length, cs = CompactSize.of_cstruct_int cs in
-    Cstruct.(sub cs 0 length |> to_string, shift cs length)
+    let length', cs = CompactSize.of_cstruct_int cs in
+    Cstruct.(sub cs 0 length' |> to_string, shift cs length')
 
   let to_cstruct cs s =
     let len = String.length s in

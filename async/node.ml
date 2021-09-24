@@ -132,7 +132,7 @@ let handle_chunk w buf ~pos ~len =
     let cs = Cstruct.of_bigarray ~off:pos ~len buf in
     let hdr, cs_payload = MessageHeader.of_cstruct cs in
     let msg_size = MessageHeader.size + hdr.size in
-    if Cstruct.len cs_payload < hdr.size then
+    if Cstruct.length cs_payload < hdr.size then
       return (`Consumed (0, `Need msg_size))
     else
       match Message.of_cstruct cs with
