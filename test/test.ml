@@ -1,15 +1,18 @@
+open Alcotest
 open Bitcoin
-
-let assert_equal a b = assert (a = b)
 
 module TestUtil = struct
   open Util
 
   let verify_size () =
-    assert_equal (String.length Hash160.(compute_string "" |> to_string)) Hash160.length
+    check
+      int
+      "size"
+      Hash160.length
+      (String.length Hash160.(compute_string "" |> to_string))
   ;;
 
-  let runtest = [ "Hash160.{of_string,to_string}", `Quick, verify_size ]
+  let runtest = [ test_case "Hash160.{of_string,to_string}" `Quick verify_size ]
 end
 
 let rawTx =
@@ -32,11 +35,11 @@ let testTx =
     "01000000017b1eabe0209b1fe794124575ef807057c77ada2138ae4fa8d6c4de0398a14f3f00000000494830450221008949f0cb400094ad2b5eb399d59d01c14d73d8fe6e96df1a7150deb388ab8935022079656090d7f6bac4c9a94e0aad311a4268e082a725f8aeae0573fb12ff866a5f01ffffffff01f0ca052a010000001976a914cbc20a7664f2f69e5355aa427045bc15e7c6c77288ac00000000"
 ;;
 
-let hex = Alcotest.testable Hex.pp ( = )
-let cstruct = Alcotest.testable Cstruct.hexdump_pp Cstruct.equal
+let hex = testable Hex.pp ( = )
+let cstruct = testable Cstruct.hexdump_pp Cstruct.equal
 
 module TestScript = struct
-  let script = Alcotest.testable Script.pp ( = )
+  let script = testable Script.pp ( = )
 
   let scripts =
     List.map
@@ -52,8 +55,8 @@ module TestScript = struct
          Format.eprintf "%a@." Script.pp s;
          let cs' = Script.serialize s in
          let s', _ = Script.of_cstruct cs' in
-         Alcotest.check script "type equality" s s';
-         Alcotest.check cstruct "string equality" cs cs')
+         check script "type equality" s s';
+         check cstruct "string equality" cs cs')
       scripts
   ;;
 
@@ -74,17 +77,19 @@ module TestScript = struct
     done
   ;;
 
-  let runtest = [ "Opcode.{of,to}_int", `Quick, test_opcodes; "trip", `Quick, round ]
+  let runtest =
+    [ test_case "Opcode.{of,to}_int" `Quick test_opcodes; test_case "trip" `Quick round ]
+  ;;
 end
 
 module TestTransaction = struct
   open Protocol
 
-  let transaction = Alcotest.testable Transaction.pp ( = )
+  let transaction = testable Transaction.pp ( = )
 
   let hash256 =
     let open Util.Hash256 in
-    Alcotest.testable pp equal
+    testable pp equal
   ;;
 
   let txs =
@@ -101,11 +106,11 @@ module TestTransaction = struct
       (fun (h, tx_hex) ->
          let t = Transaction.of_hex tx_hex in
          let h' = Transaction.hash256 t in
-         Alcotest.(check hash256 "hash" h h');
+         check hash256 "hash" h h';
          let tx_hex' = Transaction.to_hex t in
          let t' = Transaction.of_hex tx_hex' in
-         Alcotest.check transaction "trip_t" t t';
-         Alcotest.(check hex "trip_t_string" tx_hex tx_hex'))
+         check transaction "trip_t" t t';
+         check hex "trip_t_string" tx_hex tx_hex')
       txs
   ;;
 
@@ -130,7 +135,9 @@ module TestTransaction = struct
   ;;
 
   let runtest =
-    [ "trip", `Quick, trip; "Transaction.of_cstruct", `Quick, test_transaction ]
+    [ test_case "trip" `Quick trip
+    ; test_case "Transaction.of_cstruct" `Quick test_transaction
+    ]
   ;;
 end
 
@@ -146,7 +153,7 @@ end
  * end *)
 
 let () =
-  Alcotest.run
+  run
     "bitcoin"
     [ "Util", TestUtil.runtest
     ; "Script", TestScript.runtest
