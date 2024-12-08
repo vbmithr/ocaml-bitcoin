@@ -61,6 +61,8 @@ end
 module Hash160 : HASH
 module Hash256 : HASH
 
+module BitcoinAddr : Base58.S with type version = Base58.Bitcoin.Version.t
+
 module Chksum : sig
   val compute : Cstruct.t -> string
   val compute' : Cstruct.t -> Cstruct.t -> int * string
@@ -128,7 +130,6 @@ module Bitv : sig
 end
 
 module Crypto : Base58.CRYPTO
-val c : (module Base58.CRYPTO)
 
 val context : Libsecp256k1.External.Context.t
 (** [context] is a [secp256k1] context initialized for signind and

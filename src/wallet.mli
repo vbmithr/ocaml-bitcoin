@@ -1,3 +1,4 @@
+open Util
 open Libsecp256k1.External
 
 (* module Private : sig
@@ -17,18 +18,18 @@ module WIF : sig
   val create :
     ?testnet:bool -> ?compress:bool -> Key.secret Key.t -> t
 
-  val to_base58 : Context.t -> t -> Base58.Bitcoin.t
-  val of_base58 : Context.t -> Base58.Bitcoin.t -> (t, string) result
+  val to_base58 : Context.t -> t -> BitcoinAddr.t
+  val of_base58 : Context.t -> BitcoinAddr.t -> (t, string) result
 end
 
 module Address : sig
-  val of_wif : Context.t -> WIF.t -> Base58.Bitcoin.t
+  val of_wif : Context.t -> WIF.t -> BitcoinAddr.t
   val of_pubkey :
-    ?version:Base58.Bitcoin.version -> ?compress:bool ->
-    Context.t -> Key.public Key.t -> Base58.Bitcoin.t
+    ?version:BitcoinAddr.version -> ?compress:bool ->
+    Context.t -> Key.public Key.t -> BitcoinAddr.t
   val of_script :
-    ?version:Base58.Bitcoin.version -> Script.t -> Base58.Bitcoin.t
-  val to_script : Base58.Bitcoin.t -> Script.t
+    ?version:BitcoinAddr.version -> Script.t -> BitcoinAddr.t
+  val to_script : BitcoinAddr.t -> Script.t
 end
 
 module KeyPath : sig

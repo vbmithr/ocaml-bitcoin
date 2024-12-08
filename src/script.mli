@@ -1,3 +1,5 @@
+open Util
+
 module Opcode : sig
   type t =
     | Op_pushdata of int
@@ -141,7 +143,7 @@ val hash160 : t -> Util.Hash160.t
 module Std : sig
   module P2PKH : sig
     open Libsecp256k1.External
-    val scriptRedeem : Base58.Bitcoin.t -> t
+    val scriptRedeem : BitcoinAddr.t -> t
 
     val scriptSig : Context.t -> Cstruct.t -> Key.public Key.t -> t
     (** [scriptSig] is [[signature ; pkh]] *)

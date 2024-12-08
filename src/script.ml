@@ -451,9 +451,10 @@ let hash160 t =
   let _ = to_cstruct cs t in
   Hash160.compute_cstruct cs
 
+
 module Std = struct
   module P2PKH = struct
-    let scriptRedeem { Base58.Bitcoin.version ; payload } =
+    let scriptRedeem { BitcoinAddr.version ; payload } =
       begin match version with
       | P2PKH
       | Testnet_P2PKH -> ()

@@ -166,7 +166,7 @@ module GetHashes = struct
     | 0 -> List.rev acc, cs
     | n ->
       let h, cs = Hash256.of_cstruct cs in
-      read_hash (h :: acc) cs (Caml.pred n)
+      read_hash (h :: acc) cs (pred n)
 
   let of_cstruct cs =
     let open Cstruct in

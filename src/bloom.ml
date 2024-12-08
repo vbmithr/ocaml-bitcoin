@@ -1,5 +1,4 @@
 open Sexplib.Std
-open Murmur3.Murmur_cstruct
 open Util
 
 let bytes_max = 36000
@@ -22,7 +21,7 @@ let to_filter { filter; _ } =
 
 let pp_hex ppf t =
   let `Hex filter_hex = Hex.of_string (to_filter t) in
-  Caml.Format.fprintf ppf "%s" filter_hex
+  Format.fprintf ppf "%s" filter_hex
 
 let of_filter filter nb_funcs tweak =
   let len = String.length filter in
@@ -57,7 +56,7 @@ let reset t =
 let hash { filter ; tweak ; len; _ } data func_id =
   let res = Cstruct.create 4 in
   let seed = Int32.(add (mul (of_int func_id) seed_mult) tweak) in
-  murmur_x86_32 res data seed ;
+  Murmur3.Murmur_cstruct.murmur_x86_32 res data seed ;
   let open Stdint in
   let res = Uint32.of_int32 (Cstruct.LE.get_uint32 res 0) in
   let filter_size = Uint32.of_int (len * 8) in

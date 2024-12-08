@@ -2,4 +2,9 @@
  (name node)
  (public_name bitcoin-node)
  (package bitcoin-node)
- (libraries bitcoin core async uri base58))
+ (libraries
+   bitcoin
+   core
+   async
+   uri
+   base58))

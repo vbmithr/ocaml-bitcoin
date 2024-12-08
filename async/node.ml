@@ -12,7 +12,7 @@ let buf = Cstruct.create 4096
 let network = ref Network.Mainnet
 
 let my_addresses =
-  Base58.Bitcoin.of_string_exn c "mjVrE2kfz42sLR5gFcfvG6PwbAjhpmsKnn"
+  BitcoinAddr.of_string_exn "mjVrE2kfz42sLR5gFcfvG6PwbAjhpmsKnn"
 
 let write_cstruct w (cs : Cstruct.t) =
   (* debug "write_cstruct %d %d" cs.off cs.len ; *)
@@ -197,5 +197,5 @@ let command =
   in
   Command.Staged.async_spec ~summary:"Bitcoin Node" spec main
 
-let () = Command.run command
+let () = Command_unix.run command
 

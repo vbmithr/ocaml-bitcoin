@@ -127,7 +127,7 @@ module Hash (H2 : Digestif.S) (H1 : Digestif.S) = struct
     of_hex_rpc (`Hex (Sexplib.Std.string_of_sexp sexp))
 
   let of_cstruct cs =
-    Hash (Cstruct.copy cs 0 length),
+    Hash (Cstruct.to_string cs ~off:0 ~len:length),
     Cstruct.shift cs length
 
   let compute_bigarray data =
@@ -180,6 +180,11 @@ end
 
 module Hash160 : HASH = Hash (Digestif.RMD160) (Digestif.SHA256)
 module Hash256 : HASH = Hash (Digestif.SHA256) (Digestif.SHA256)
+
+module BitcoinAddr = Base58.Bitcoin.Make(struct
+    let sha256 x =
+      Digestif.SHA256.(digest_string x |> to_raw_string)
+  end)
 
 module Chksum = struct
   let compute cs =
@@ -359,7 +364,7 @@ module Bitv = struct
         if Bitv.get bitv (8 * i + j) then
           v := !v lor (1 lsl j)
       done ;
-      EndianString.BigEndian.set_int8 s i !v
+      Bytes.set_int8 s i !v
     done ;
     Bytes.unsafe_to_string s
 
@@ -382,6 +387,5 @@ module Crypto = struct
   let sha256 s = Digestif.SHA256.(to_raw_string (digest_string s))
 end
 
-let c = (module Crypto : Base58.CRYPTO)
 let context =
   Libsecp256k1.External.Context.create ()

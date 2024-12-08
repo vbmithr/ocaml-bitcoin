@@ -24,13 +24,13 @@ module WIF = struct
 
   let to_base58 ctx { privkey ; testnet ; compress } =
     let version =
-      Base58.Bitcoin.(if testnet then Testnet_privkey else Privkey) in
+      (if testnet then Base58.Bitcoin.Version.Testnet_privkey else Privkey) in
     let cs = Cstruct.create (if compress then 32 else 33) in
     let _nb_written = Key.write ~compress ctx cs.buffer privkey in
     if compress then Cstruct.set_uint8 cs 32 0x01 ;
-    Base58.Bitcoin.create ~version ~payload:(Cstruct.to_string cs)
+    BitcoinAddr.create ~version ~payload:(Cstruct.to_string cs)
 
-  let of_base58 ctx { Base58.Bitcoin.version ; payload } =
+  let of_base58 ctx { BitcoinAddr.version ; payload } =
     let open Rresult in
     begin match version with
       | Privkey -> R.return false
@@ -43,10 +43,10 @@ module WIF = struct
     create ~testnet ~compress privkey
 
   let pp ctx ppf t =
-    Base58.Bitcoin.pp c ppf (to_base58 ctx t)
+    BitcoinAddr.pp ppf (to_base58 ctx t)
 
   let show ctx t =
-    Base58.Bitcoin.show c (to_base58 ctx t)
+    BitcoinAddr.show (to_base58 ctx t)
 end
 
 module Address = struct
@@ -54,27 +54,27 @@ module Address = struct
     let pk = Key.neuterize_exn ctx privkey in
     let pk = Key.to_bytes ~compress ctx pk in
     let hash160 = Util.Hash160.compute_bigarray pk in
-    Base58.Bitcoin.create
+    BitcoinAddr.create
       ~version:(if testnet then Testnet_P2PKH else P2PKH)
       ~payload:(Util.Hash160.to_string hash160)
 
   let of_pubkey
-      ?(version=Base58.Bitcoin.P2PKH) ?(compress=true) ctx pk =
+      ?(version=Base58.Bitcoin.Version.P2PKH) ?(compress=true) ctx pk =
     let pk = Key.to_bytes ~compress ctx pk in
     let hash160 = Util.Hash160.compute_bigarray pk in
-    Base58.Bitcoin.create ~version
+    BitcoinAddr.create ~version
       ~payload:(Util.Hash160.to_string hash160)
 
   let max_serialized_script_size = 520
 
-  let of_script ?(version=Base58.Bitcoin.P2SH) script =
+  let of_script ?(version=Base58.Bitcoin.Version.P2SH) script =
     let cs = Cstruct.create max_serialized_script_size in
     let cs' = Script.to_cstruct cs script in
     let hash160 = Util.Hash160.compute_cstruct (Cstruct.sub cs 0 cs'.off) in
-    Base58.Bitcoin.create ~version
+    BitcoinAddr.create ~version
       ~payload:(Util.Hash160.to_string hash160)
 
-  let to_script { Base58.Bitcoin.version ; payload } =
+  let to_script { BitcoinAddr.version ; payload } =
     match version with
     | P2PKH | Testnet_P2PKH ->
       Script.Element.[O Op_dup ; O Op_hash160 ;
