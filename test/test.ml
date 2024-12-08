@@ -83,8 +83,6 @@ module TestScript = struct
 end
 
 module TestTransaction = struct
-  open Protocol
-
   let transaction = testable Transaction.pp ( = )
 
   let hash256 =

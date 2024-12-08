@@ -2,7 +2,6 @@
  (name bitcoin)
  (public_name bitcoin)
  (preprocess (pps ppx_sexp_conv))
- (modules util protocol script wallet bloom p2p)
  (libraries
    fmt
    cstruct-sexp

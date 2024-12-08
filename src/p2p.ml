@@ -4,7 +4,6 @@
   ---------------------------------------------------------------------------*)
 
 open Util
-open Protocol
 open Sexplib.Std
 open StdLabels
 module CS = Bitcoin_cstruct

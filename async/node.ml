@@ -1,7 +1,7 @@
 open Core
 open Async
+open Bitcoin
 open Bitcoin.Util
-open Bitcoin.Protocol
 open Bitcoin.P2p
 open Log.Global
 

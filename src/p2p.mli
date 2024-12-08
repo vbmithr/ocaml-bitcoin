@@ -4,7 +4,6 @@
   ---------------------------------------------------------------------------*)
 
 open Util
-open Protocol
 
 module Network : sig
   type t =
