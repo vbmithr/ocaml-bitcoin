@@ -1,3 +1,5 @@
 (test
  (name test)
- (libraries bitcoin alcotest))
+ (libraries
+   bitcoin
+   alcotest))

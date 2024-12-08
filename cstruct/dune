@@ -2,5 +2,7 @@
  (name bitcoin_cstruct)
  (public_name bitcoin.cstruct)
  (preprocess (pps ppx_cstruct))
- (modules bitcoin_cstruct)
- (libraries ptime cstruct))
+ (libraries
+   ptime
+   cstruct)
+)

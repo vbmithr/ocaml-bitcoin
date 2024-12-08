@@ -130,10 +130,9 @@ module KeyPath = struct
   let pp ppf t = Format.pp_print_string ppf (to_string t)
 
   let write_be buf pos t =
-    let open EndianBytes.BigEndian in
     let len =
       ListLabels.fold_left t ~init:0 ~f:(fun i v ->
-        set_int32 buf (pos + (i * 4)) v;
+        Bytes.set_int32_be buf (pos + (i * 4)) v;
         i + 1)
     in
     pos + (len * 4)

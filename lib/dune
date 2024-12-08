@@ -8,7 +8,6 @@
    sexplib
    rresult
    bitcoin_cstruct
-   astring
    stdint
    ocplib-endian
    ipaddr

@@ -36,12 +36,12 @@ let load_filter w data =
   debug "Sent FilterLoad"
 ;;
 
-let get_data w invs =
-  let msg = Message.GetData invs in
-  let cs = Message.to_cstruct ~network:!network buf msg in
-  write_cstruct2 w buf cs;
-  debug "Sent GetData"
-;;
+(* let get_data w invs = *)
+(*   let msg = Message.GetData invs in *)
+(*   let cs = Message.to_cstruct ~network:!network buf msg in *)
+(*   write_cstruct2 w buf cs; *)
+(*   debug "Sent GetData" *)
+(* ;; *)
 
 let process_error _w header = sexp ~level:`Error (MessageHeader.sexp_of_t header)
 

@@ -239,6 +239,6 @@ module Message : sig
 
   type error = Invalid_checksum of MessageHeader.t
 
-  val of_cstruct : Cstruct.t -> (MessageHeader.t * t, error) Rresult.result * Cstruct.t
+  val of_cstruct : Cstruct.t -> (MessageHeader.t * t, error) result * Cstruct.t
   val to_cstruct : network:Network.t -> Cstruct.t -> t -> Cstruct.t
 end

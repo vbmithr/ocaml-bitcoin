@@ -371,7 +371,7 @@ module Bitv = struct
     let len = String.length s in
     let bitv = Bitv.create (len * 8) false in
     for i = 0 to len - 1 do
-      let v = EndianString.BigEndian.get_int8 s i in
+      let v = String.get_int8 s i in
       for j = 0 to 7 do
         if v land (1 lsl j) <> 0 then Bitv.set bitv ((8 * i) + j) true
       done
