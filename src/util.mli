@@ -16,14 +16,12 @@ module Timestamp : sig
 
   val t_of_sexp : Sexplib.Sexp.t -> t
   val sexp_of_t : t -> Sexplib.Sexp.t
-
   val of_int_sec : int -> t
   val to_int_sec : t -> int
   val of_int64_sec : Int64.t -> t
   val to_int64_sec : t -> Int64.t
   val of_int32_sec : Int32.t -> t
   val to_int32_sec : t -> Int32.t
-
   val now : unit -> t
 end
 
@@ -34,22 +32,17 @@ module type HASH = sig
   val equal : t -> t -> bool
   val length : int
   val hash : t -> int
-
   val empty : t
   val of_hex_internal : Hex.t -> t
   val of_hex_rpc : Hex.t -> t
-
   val pp : Format.formatter -> t -> unit
   val show : t -> string
-
   val compute_bigarray : Cstruct.buffer -> t
   val compute_cstruct : Cstruct.t -> t
   val compute_string : string -> t
   val compute_concat : t -> t -> t
-
   val of_string : string -> t
   val of_cstruct : Cstruct.t -> t * Cstruct.t
-
   val to_string : t -> string
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
 
@@ -60,7 +53,6 @@ end
 
 module Hash160 : HASH
 module Hash256 : HASH
-
 module BitcoinAddr : Base58.S with type version = Base58.Bitcoin.Version.t
 
 module Chksum : sig
@@ -70,8 +62,8 @@ module Chksum : sig
 
   exception Invalid_checksum of string * string
 
+  (** @raises Invalid_checksum on error. *)
   val verify_exn : expected:string -> Cstruct.t -> unit
-    (** @raises Invalid_checksum on error. *)
 end
 
 module CompactSize : sig
@@ -83,9 +75,7 @@ module CompactSize : sig
   val of_int : int -> t
   val of_int32 : Int32.t -> t
   val of_int64 : Int64.t -> t
-
   val size : t -> int
-
   val of_cstruct : Cstruct.t -> t * Cstruct.t
   val of_cstruct_int : Cstruct.t -> int * Cstruct.t
   val to_cstruct : Cstruct.t -> t -> Cstruct.t
@@ -99,22 +89,14 @@ end
 
 module ObjList : sig
   val size : 'a list -> f:('a -> int) -> int
-
-  val of_cstruct :
-    Cstruct.t -> f:(Cstruct.t -> 'a * Cstruct.t) -> 'a list * Cstruct.t
-
-  val to_cstruct :
-    Cstruct.t -> 'a list -> f:(Cstruct.t -> 'a -> Cstruct.t) -> Cstruct.t
+  val of_cstruct : Cstruct.t -> f:(Cstruct.t -> 'a * Cstruct.t) -> 'a list * Cstruct.t
+  val to_cstruct : Cstruct.t -> 'a list -> f:(Cstruct.t -> 'a -> Cstruct.t) -> Cstruct.t
 end
 
 module ObjArray : sig
   val size : 'a array -> f:('a -> int) -> int
-
-  val of_cstruct :
-    Cstruct.t -> f:(Cstruct.t -> 'a * Cstruct.t) -> 'a array * Cstruct.t
-
-  val to_cstruct :
-    Cstruct.t -> 'a array -> f:(Cstruct.t -> 'a -> Cstruct.t) -> Cstruct.t
+  val of_cstruct : Cstruct.t -> f:(Cstruct.t -> 'a * Cstruct.t) -> 'a array * Cstruct.t
+  val to_cstruct : Cstruct.t -> 'a array -> f:(Cstruct.t -> 'a -> Cstruct.t) -> Cstruct.t
 end
 
 module Bitv : sig
@@ -122,15 +104,13 @@ module Bitv : sig
 
   val t_of_sexp : Sexplib.Sexp.t -> t
   val sexp_of_t : t -> Sexplib.Sexp.t
-
   val to_string_le : t -> string
   val of_string_le : string -> t
-
   val to_bool_list : t -> bool list
 end
 
 module Crypto : Base58.CRYPTO
 
-val context : Libsecp256k1.External.Context.t
 (** [context] is a [secp256k1] context initialized for signind and
     verifying. *)
+val context : Libsecp256k1.External.Context.t

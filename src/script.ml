@@ -235,9 +235,10 @@ module Opcode = struct
     | Op_nop8 -> 183
     | Op_nop9 -> 184
     | Op_nop10 -> 185
+  ;;
 
   let of_int = function
-    | n when n >= 0 && n < 76  -> Op_pushdata n
+    | n when n >= 0 && n < 76 -> Op_pushdata n
     | 76 -> Op_pushdata1
     | 77 -> Op_pushdata2
     | 78 -> Op_pushdata4
@@ -351,14 +352,15 @@ module Opcode = struct
     | 253 -> Op_pubkeyhash
     | 254 -> Op_pubkey
     | 255 -> Op_invalidopcode
-    | n -> invalid_arg ("Opcode.of_int: got " ^ (string_of_int n))
+    | n -> invalid_arg ("Opcode.of_int: got " ^ string_of_int n)
+  ;;
 
-  let of_cstruct cs =
-    Cstruct.(get_uint8 cs 0 |> of_int, shift cs 1)
+  let of_cstruct cs = Cstruct.(get_uint8 cs 0 |> of_int, shift cs 1)
 
   let to_cstruct cs opcode =
-    Cstruct.set_uint8 cs 0 (to_int opcode) ;
+    Cstruct.set_uint8 cs 0 (to_int opcode);
     Cstruct.shift cs 1
+  ;;
 end
 
 module Element = struct
@@ -369,49 +371,46 @@ module Element = struct
 
   let op_size_prefix buf =
     let len = Cstruct.length buf in
-    if len <= 0x4b then
-      [ O (Op_pushdata len) ]
-    else begin
-      assert (len <= 255) ;
+    if len <= 0x4b
+    then [ O (Op_pushdata len) ]
+    else (
+      assert (len <= 255);
       let sbuf = Cstruct.create 1 in
-      Cstruct.set_uint8 sbuf 0 len ;
-      [ O Op_pushdata1 ; D sbuf ]
-    end
+      Cstruct.set_uint8 sbuf 0 len;
+      [ O Op_pushdata1; D sbuf ])
+  ;;
+
   let op_data buf = op_size_prefix buf @ [ D buf ]
 
   let to_cstruct cs = function
-    | O opcode ->
-      Opcode.to_cstruct cs opcode
+    | O opcode -> Opcode.to_cstruct cs opcode
     | D buf ->
       let len = Cstruct.length buf in
-      Cstruct.blit buf 0 cs 0 len ;
+      Cstruct.blit buf 0 cs 0 len;
       Cstruct.shift cs len
+  ;;
 
   let length = function
     | O _ -> 1
     | D cs -> Cstruct.length cs
+  ;;
 end
 
 type t = Element.t list [@@deriving sexp]
 
-let pp ppf t =
-  Sexplib.Sexp.pp_hum ppf (sexp_of_t t)
-
-let size elts =
-  ListLabels.fold_left elts ~init:0 ~f:(fun acc e -> acc + Element.length e)
+let pp ppf t = Sexplib.Sexp.pp_hum ppf (sexp_of_t t)
+let size elts = ListLabels.fold_left elts ~init:0 ~f:(fun acc e -> acc + Element.length e)
 
 let read_all cs =
   let open Element in
   let rec inner acc data_len cs =
-    if Cstruct.length cs = 0 then List.rev acc
-    else if cs.len = 0 && data_len <> 0 then
-      invalid_arg "Script.read_all: cs too short"
-    else if data_len > 0 then
-      inner
-        (D (Cstruct.sub cs 0 data_len) :: acc)
-        0
-        (Cstruct.shift cs data_len)
-    else
+    if Cstruct.length cs = 0
+    then List.rev acc
+    else if cs.len = 0 && data_len <> 0
+    then invalid_arg "Script.read_all: cs too short"
+    else if data_len > 0
+    then inner (D (Cstruct.sub cs 0 data_len) :: acc) 0 (Cstruct.shift cs data_len)
+    else (
       let elt, cs = Opcode.of_cstruct cs in
       match elt with
       | Op_pushdata n -> inner (O (Op_pushdata n) :: acc) n cs
@@ -427,59 +426,71 @@ let read_all cs =
         let data_len = Cstruct.LE.get_uint32 cs 0 |> Int32.to_int in
         let len = Cstruct.sub cs 0 4 in
         inner (D len :: O Op_pushdata4 :: acc) data_len (Cstruct.shift cs 4)
-      | op ->
-        inner (O op :: acc) 0 cs
+      | op -> inner (O op :: acc) 0 cs)
   in
   inner [] 0 cs
+;;
 
-let of_cstruct ?(pos=0) ?len cs =
-  let len = match len with None -> Cstruct.length cs | Some l -> l in
+let of_cstruct ?(pos = 0) ?len cs =
+  let len =
+    match len with
+    | None -> Cstruct.length cs
+    | Some l -> l
+  in
   read_all (Cstruct.sub cs pos len), Cstruct.shift cs len
+;;
 
-let to_cstruct cs elts =
-  ListLabels.fold_left elts ~init:cs ~f:Element.to_cstruct
+let to_cstruct cs elts = ListLabels.fold_left elts ~init:cs ~f:Element.to_cstruct
 
 let serialize elts =
   let len = size elts in
   let cs = Cstruct.create len in
   let _ = to_cstruct cs elts in
   cs
+;;
 
 let hash160 t =
   let scriptlen = size t in
   let cs = Cstruct.create scriptlen in
   let _ = to_cstruct cs t in
   Hash160.compute_cstruct cs
-
+;;
 
 module Std = struct
   module P2PKH = struct
-    let scriptRedeem { BitcoinAddr.version ; payload } =
-      begin match version with
-      | P2PKH
-      | Testnet_P2PKH -> ()
-      | _ -> invalid_arg "must be a P2PKH address"
-      end ;
+    let scriptRedeem { BitcoinAddr.version; payload } =
+      (match version with
+       | P2PKH | Testnet_P2PKH -> ()
+       | _ -> invalid_arg "must be a P2PKH address");
       let payload = Cstruct.of_string payload in
-      Element.[O Op_dup ; O Op_hash160 ;
-               O (Op_pushdata 20) ; D payload ;
-               O Op_equalverify ; O Op_checksig ]
+      Element.
+        [ O Op_dup
+        ; O Op_hash160
+        ; O (Op_pushdata 20)
+        ; D payload
+        ; O Op_equalverify
+        ; O Op_checksig
+        ]
+    ;;
 
     let scriptSig ctx signature pk =
       let pk = Cstruct.of_bigarray (Key.to_bytes ctx pk) in
       Element.(op_data signature @ op_data pk)
+    ;;
   end
 
   module P2SH = struct
     let scriptRedeem script =
       let script_hash = Cstruct.create Hash160.length in
       let _ = Hash160.to_cstruct script_hash (hash160 script) in
-      Element.[ O Op_hash160 ; O (Op_pushdata 20) ; D script_hash ; O Op_equalverify ]
+      Element.[ O Op_hash160; O (Op_pushdata 20); D script_hash; O Op_equalverify ]
+    ;;
   end
 end
 
 module Stack = struct
   open Stdint
+
   let to_int32 cs =
     match Cstruct.length cs with
     | 0 -> 0l
@@ -488,27 +499,31 @@ module Stack = struct
     | 3 -> Int24.(of_bytes_little_endian (Cstruct.to_bytes cs) 0 |> to_int32)
     | 4 -> Int32.(of_bytes_little_endian (Cstruct.to_bytes cs) 0)
     | _ -> invalid_arg "Stack.to_int32: input is longer than 4 bytes"
+  ;;
 
   let of_int32 i =
     let buf = Bytes.create 4 in
     match i with
     | i when i >= -128l && i < 128l ->
-      Int8.(to_bytes_little_endian (of_int32 i) buf 0) ;
+      Int8.(to_bytes_little_endian (of_int32 i) buf 0);
       Cstruct.of_bytes (Bytes.sub buf 0 1)
     | i when i >= -32768l && i < 32767l ->
-      Int16.(to_bytes_little_endian (of_int32 i) buf 0) ;
+      Int16.(to_bytes_little_endian (of_int32 i) buf 0);
       Cstruct.of_bytes (Bytes.sub buf 0 2)
     | i when i >= 16777216l && i < 16777215l ->
-      Int24.(to_bytes_little_endian (of_int32 i) buf 0) ;
+      Int24.(to_bytes_little_endian (of_int32 i) buf 0);
       Cstruct.of_bytes (Bytes.sub buf 0 3)
     | _ ->
-      Int32.(to_bytes_little_endian i buf 0) ;
+      Int32.(to_bytes_little_endian i buf 0);
       Cstruct.of_bytes (Bytes.sub buf 0 4)
+  ;;
 
-    let to_bool cs = (to_int32 cs) <> 0l
-    let of_bool = function
-      | true -> of_int32 1l
-      | false -> Cstruct.create 0
+  let to_bool cs = to_int32 cs <> 0l
+
+  let of_bool = function
+    | true -> of_int32 1l
+    | false -> Cstruct.create 0
+  ;;
 end
 
 module Run = struct
@@ -529,7 +544,8 @@ module Run = struct
       | O Op_pushdata1 :: rest, _
       | O Op_pushdata2 :: rest, _
       | O Op_pushdata4 :: rest, _ -> eval_main iflevel stack altstack rest
-      | O Op_1negate :: rest, _ -> eval_main iflevel (Stack.of_int32 (-1l) :: stack) altstack rest
+      | O Op_1negate :: rest, _ ->
+        eval_main iflevel (Stack.of_int32 (-1l) :: stack) altstack rest
       | O Op_1 :: rest, _ -> eval_main iflevel (Stack.of_int32 1l :: stack) altstack rest
       | O Op_2 :: rest, _ -> eval_main iflevel (Stack.of_int32 2l :: stack) altstack rest
       | O Op_3 :: rest, _ -> eval_main iflevel (Stack.of_int32 3l :: stack) altstack rest
@@ -539,32 +555,39 @@ module Run = struct
       | O Op_7 :: rest, _ -> eval_main iflevel (Stack.of_int32 7l :: stack) altstack rest
       | O Op_8 :: rest, _ -> eval_main iflevel (Stack.of_int32 8l :: stack) altstack rest
       | O Op_9 :: rest, _ -> eval_main iflevel (Stack.of_int32 9l :: stack) altstack rest
-      | O Op_10 :: rest, _ -> eval_main iflevel (Stack.of_int32 10l :: stack) altstack rest
-      | O Op_11 :: rest, _ -> eval_main iflevel (Stack.of_int32 11l :: stack) altstack rest
-      | O Op_12 :: rest, _ -> eval_main iflevel (Stack.of_int32 12l :: stack) altstack rest
-      | O Op_13 :: rest, _ -> eval_main iflevel (Stack.of_int32 13l :: stack) altstack rest
-      | O Op_14 :: rest, _ -> eval_main iflevel (Stack.of_int32 14l :: stack) altstack rest
-      | O Op_15 :: rest, _ -> eval_main iflevel (Stack.of_int32 15l :: stack) altstack rest
-      | O Op_16 :: rest, _ -> eval_main iflevel (Stack.of_int32 16l :: stack) altstack rest
+      | O Op_10 :: rest, _ ->
+        eval_main iflevel (Stack.of_int32 10l :: stack) altstack rest
+      | O Op_11 :: rest, _ ->
+        eval_main iflevel (Stack.of_int32 11l :: stack) altstack rest
+      | O Op_12 :: rest, _ ->
+        eval_main iflevel (Stack.of_int32 12l :: stack) altstack rest
+      | O Op_13 :: rest, _ ->
+        eval_main iflevel (Stack.of_int32 13l :: stack) altstack rest
+      | O Op_14 :: rest, _ ->
+        eval_main iflevel (Stack.of_int32 14l :: stack) altstack rest
+      | O Op_15 :: rest, _ ->
+        eval_main iflevel (Stack.of_int32 15l :: stack) altstack rest
+      | O Op_16 :: rest, _ ->
+        eval_main iflevel (Stack.of_int32 16l :: stack) altstack rest
       | O Op_nop :: rest, _ -> eval_main iflevel stack altstack rest
       | O Op_if :: _rest, [] -> invalid_arg "Run.eval: if with empty stack"
       | O Op_notif :: _rest, [] -> invalid_arg "Run.eval: notif with empty stack"
       | O Op_if :: rest, v :: _ ->
-        if Stack.to_bool v then
-          eval_main (succ iflevel) stack altstack rest
-        else
-          drop stack altstack (succ iflevel) (succ iflevel) rest
+        if Stack.to_bool v
+        then eval_main (succ iflevel) stack altstack rest
+        else drop stack altstack (succ iflevel) (succ iflevel) rest
       | O Op_notif :: rest, v :: _ ->
-        if Stack.to_bool v then
-          drop stack altstack (succ iflevel) (succ iflevel) rest
-        else
-          eval_main (succ iflevel) stack altstack rest
+        if Stack.to_bool v
+        then drop stack altstack (succ iflevel) (succ iflevel) rest
+        else eval_main (succ iflevel) stack altstack rest
       | O Op_else :: rest, _ ->
-        if iflevel = 0 then invalid_arg "Run.eval: unconsistent else"
+        if iflevel = 0
+        then invalid_arg "Run.eval: unconsistent else"
         else drop stack altstack iflevel iflevel rest
       | O Op_endif :: rest, _ ->
         let iflevel = pred iflevel in
-        if iflevel < 0 then invalid_arg "Run.eval: unconsistent endif"
+        if iflevel < 0
+        then invalid_arg "Run.eval: unconsistent endif"
         else eval_main iflevel stack altstack rest
       | O Op_verify :: _rest, [] ->
         invalid_arg "Run.eval: op_verify without a top stack element"
@@ -574,58 +597,49 @@ module Run = struct
         invalid_arg "Run.eval: op_toaltstack without a top stack element"
       | O Op_toaltstack :: rest, v :: stack ->
         eval_main iflevel stack (v :: altstack) rest
-      | O Op_fromaltstack :: rest, stack -> begin
-          match altstack with
-          | [] -> invalid_arg "Run.eval: op_fromaltstack without a top stack element"
-          | v :: altstack -> eval_main iflevel (v :: stack) altstack rest
-        end
+      | O Op_fromaltstack :: rest, stack ->
+        (match altstack with
+         | [] -> invalid_arg "Run.eval: op_fromaltstack without a top stack element"
+         | v :: altstack -> eval_main iflevel (v :: stack) altstack rest)
       | O Op_ifdup :: _rest, [] ->
         invalid_arg "Run.eval: op_ifdup without a top stack element"
       | O Op_ifdup :: rest, v :: _ when Stack.to_bool v ->
         eval_main iflevel (v :: stack) altstack rest
-      | O Op_ifdup :: rest, stack ->
-        eval_main iflevel stack altstack rest
+      | O Op_ifdup :: rest, stack -> eval_main iflevel stack altstack rest
       | O Op_depth :: rest, _ ->
         let length = List.length stack |> Int32.of_int |> Stack.of_int32 in
         eval_main iflevel (length :: stack) altstack rest
       | O Op_drop :: _rest, [] ->
         invalid_arg "Run.eval: op_drop without a top stack element"
-      | O Op_drop :: rest, _v :: stack ->
-        eval_main iflevel stack altstack rest
+      | O Op_drop :: rest, _v :: stack -> eval_main iflevel stack altstack rest
       | O Op_dup :: _rest, [] ->
         invalid_arg "Run.eval: op_dup without a top stack element"
-      | O Op_dup :: rest, v :: _ ->
-        eval_main iflevel (v :: stack) altstack rest
-      | O Op_nip :: rest, x :: _ :: stack ->
-        eval_main iflevel (x :: stack) altstack rest
+      | O Op_dup :: rest, v :: _ -> eval_main iflevel (v :: stack) altstack rest
+      | O Op_nip :: rest, x :: _ :: stack -> eval_main iflevel (x :: stack) altstack rest
       | O Op_nip :: _rest, _ ->
         invalid_arg "Run.eval: op_nip without at least two stack elements"
-      | O Op_over :: rest, _ :: x :: _ ->
-        eval_main iflevel (x :: stack) altstack rest
+      | O Op_over :: rest, _ :: x :: _ -> eval_main iflevel (x :: stack) altstack rest
       | O Op_over :: _rest, _ ->
         invalid_arg "Run.eval: op_over without at least two stack element"
       | O Op_pick :: _rest, [] ->
         invalid_arg "Run.eval: op_pick without a top stack element"
-      | O Op_pick :: rest, v :: stack -> begin
-          let n = Stack.to_int32 v |> Int32.to_int in
-          try
-            eval_main iflevel (List.nth stack n :: stack) altstack rest
-          with _ -> invalid_arg "Run.eval: op_pick with stack too shallow"
-        end
+      | O Op_pick :: rest, v :: stack ->
+        let n = Stack.to_int32 v |> Int32.to_int in
+        (try eval_main iflevel (List.nth stack n :: stack) altstack rest with
+         | _ -> invalid_arg "Run.eval: op_pick with stack too shallow")
       | O Op_roll :: _rest, [] ->
         invalid_arg "Run.eval: op_roll without a top stack element"
-      | O Op_roll :: rest, v :: stack -> begin
-          let n = Stack.to_int32 v |> Int32.to_int in
-          let stack, _, e =
-            ListLabels.fold_left stack ~f:begin fun (a, i, v) e ->
-              if i = n then (a, succ i, Some e)
-              else (e :: a, succ i, v)
-            end ~init:([], 0, None) in
-          match e with
-          | None -> invalid_arg "Run.eval: op_roll with stack too shallow"
-          | Some v ->
-            eval_main iflevel (v :: stack) altstack rest
-        end
+      | O Op_roll :: rest, v :: stack ->
+        let n = Stack.to_int32 v |> Int32.to_int in
+        let stack, _, e =
+          ListLabels.fold_left
+            stack
+            ~f:(fun (a, i, v) e -> if i = n then a, succ i, Some e else e :: a, succ i, v)
+            ~init:([], 0, None)
+        in
+        (match e with
+         | None -> invalid_arg "Run.eval: op_roll with stack too shallow"
+         | Some v -> eval_main iflevel (v :: stack) altstack rest)
       | O Op_rot :: rest, z :: y :: x :: stack ->
         eval_main iflevel (y :: z :: x :: stack) altstack rest
       | O Op_rot :: _rest, _ ->
@@ -638,8 +652,7 @@ module Run = struct
         eval_main iflevel (y :: x :: y :: stack) altstack rest
       | O Op_tuck :: _rest, _ ->
         invalid_arg "Run.eval: op_tuck without at least 2 stack elements"
-      | O Op_2drop :: rest, _ :: _ :: stack ->
-        eval_main iflevel stack altstack rest
+      | O Op_2drop :: rest, _ :: _ :: stack -> eval_main iflevel stack altstack rest
       | O Op_2drop :: _rest, _ ->
         invalid_arg "Run.eval: op_2drop without at least 2 stack elements"
       | O Op_2dup :: rest, y :: x :: stack ->
@@ -672,68 +685,57 @@ module Run = struct
       | O Op_or :: _, _ -> invalid_arg "Run.eval: op_or is disabled"
       | O Op_xor :: _, _ -> invalid_arg "Run.eval: op_xor is disabled"
       | O Op_equal :: rest, x :: y :: stack ->
-        let ret =  Cstruct.compare x y |> Int32.of_int |> Stack.of_int32 in
+        let ret = Cstruct.compare x y |> Int32.of_int |> Stack.of_int32 in
         eval_main iflevel (ret :: stack) altstack rest
       | O Op_equal :: _, _ ->
         invalid_arg "Run.eval: op_equal without at least 2 stack elements"
-      | O Op_equalverify :: rest, x :: y :: stack ->
-        Cstruct.compare x y = 0, stack, rest
+      | O Op_equalverify :: rest, x :: y :: stack -> Cstruct.compare x y = 0, stack, rest
       | O Op_equalverify :: _, _ ->
         invalid_arg "Run.eval: op_equalverify without at least 2 stack elements"
-      | O Op_1add :: rest, v :: stack -> begin
-          try
-            let v' = Stack.(to_int32 v |> Int32.succ |> of_int32) in
-            eval_main iflevel (v' :: stack) altstack rest
-          with _ ->
-            invalid_arg "Run.eval: op_1add is limited to 4 bytes max input"
-        end
-      | O Op_1add :: _, _ ->
-        invalid_arg "Run.eval: op_1add without a top stack element"
-      | O Op_1sub :: rest, v :: stack -> begin
-          try
-            let v' = Stack.(to_int32 v |> Int32.pred |> of_int32) in
-            eval_main iflevel (v' :: stack) altstack rest
-          with _ ->
-            invalid_arg "Run.eval: op_1sub is limited to 4 bytes max input"
-        end
-      | O Op_1sub :: _, _ ->
-        invalid_arg "Run.eval: op_1sub without a top stack element"
+      | O Op_1add :: rest, v :: stack ->
+        (try
+           let v' = Stack.(to_int32 v |> Int32.succ |> of_int32) in
+           eval_main iflevel (v' :: stack) altstack rest
+         with
+         | _ -> invalid_arg "Run.eval: op_1add is limited to 4 bytes max input")
+      | O Op_1add :: _, _ -> invalid_arg "Run.eval: op_1add without a top stack element"
+      | O Op_1sub :: rest, v :: stack ->
+        (try
+           let v' = Stack.(to_int32 v |> Int32.pred |> of_int32) in
+           eval_main iflevel (v' :: stack) altstack rest
+         with
+         | _ -> invalid_arg "Run.eval: op_1sub is limited to 4 bytes max input")
+      | O Op_1sub :: _, _ -> invalid_arg "Run.eval: op_1sub without a top stack element"
       | O Op_2mul :: _, _ -> invalid_arg "Run.eval: op_2mul is disabled"
       | O Op_2div :: _, _ -> invalid_arg "Run.eval: op_2div is disabled"
-      | O Op_negate :: rest, v :: stack -> begin
-          try
-            let v' = Stack.(to_int32 v |> Int32.neg |> of_int32) in
-            eval_main iflevel (v' :: stack) altstack rest
-          with _ ->
-            invalid_arg "Run.eval: op_negate is limited to 4 bytes max input"
-        end
+      | O Op_negate :: rest, v :: stack ->
+        (try
+           let v' = Stack.(to_int32 v |> Int32.neg |> of_int32) in
+           eval_main iflevel (v' :: stack) altstack rest
+         with
+         | _ -> invalid_arg "Run.eval: op_negate is limited to 4 bytes max input")
       | O Op_negate :: _rest, _ ->
         invalid_arg "Run.eval: op_negate without a top stack element"
-      | O Op_abs :: rest, v :: stack -> begin
-          try
-            let v' = Stack.(to_int32 v |> Int32.abs |> of_int32) in
-            eval_main iflevel (v' :: stack) altstack rest
-          with _ ->
-            invalid_arg "Run.eval: op_abs is limited to 4 bytes max input"
-        end
-      | O Op_abs :: _rest, _ ->
-        invalid_arg "Run.eval: op_abs without a top stack element"
-      | O Op_not :: rest, v :: stack -> begin
-          try
-            let v' = Stack.(of_bool (not (to_bool v))) in
-            eval_main iflevel (v' :: stack) altstack rest
-          with _ ->
-            invalid_arg "Run.eval: op_not is limited to 4 bytes max input"
-        end
-      | O Op_not :: _rest, _ ->
-        invalid_arg "Run.eval: op_not without a top stack element"
-      | O Op_0notequal :: rest, v :: stack -> begin
-          try
-            let v' = Stack.(to_bool v |> of_bool) in
-            eval_main iflevel (v' :: stack) altstack rest
-          with _ ->
-            invalid_arg "Run.eval: op_0notequal is limited to 4 bytes max input"
-        end
+      | O Op_abs :: rest, v :: stack ->
+        (try
+           let v' = Stack.(to_int32 v |> Int32.abs |> of_int32) in
+           eval_main iflevel (v' :: stack) altstack rest
+         with
+         | _ -> invalid_arg "Run.eval: op_abs is limited to 4 bytes max input")
+      | O Op_abs :: _rest, _ -> invalid_arg "Run.eval: op_abs without a top stack element"
+      | O Op_not :: rest, v :: stack ->
+        (try
+           let v' = Stack.(of_bool (not (to_bool v))) in
+           eval_main iflevel (v' :: stack) altstack rest
+         with
+         | _ -> invalid_arg "Run.eval: op_not is limited to 4 bytes max input")
+      | O Op_not :: _rest, _ -> invalid_arg "Run.eval: op_not without a top stack element"
+      | O Op_0notequal :: rest, v :: stack ->
+        (try
+           let v' = Stack.(to_bool v |> of_bool) in
+           eval_main iflevel (v' :: stack) altstack rest
+         with
+         | _ -> invalid_arg "Run.eval: op_0notequal is limited to 4 bytes max input")
       | O Op_0notequal :: _rest, _ ->
         invalid_arg "Run.eval: op_0notequal without a top stack element"
       | O Op_add :: rest, x :: y :: stack ->
@@ -752,56 +754,56 @@ module Run = struct
       | O Op_lshift :: _, _ -> invalid_arg "Run.eval: op_lshift is disabled"
       | O Op_rshift :: _, _ -> invalid_arg "Run.eval: op_rshift is disabled"
       | O Op_booland :: rest, x :: y :: stack ->
-        let conj = Stack.(((to_bool x) && (to_bool y)) |> of_bool) in
+        let conj = Stack.((to_bool x && to_bool y) |> of_bool) in
         eval_main iflevel (conj :: stack) altstack rest
       | O Op_booland :: _, _ ->
         invalid_arg "Run.eval: op_booland without at least 2 stack elements"
       | O Op_boolor :: rest, x :: y :: stack ->
-        let disj = Stack.(((to_bool x) || (to_bool y)) |> of_bool) in
+        let disj = Stack.((to_bool x || to_bool y) |> of_bool) in
         eval_main iflevel (disj :: stack) altstack rest
       | O Op_boolor :: _, _ ->
         invalid_arg "Run.eval: op_boolor without at least 2 stack elements"
       | O Op_numequal :: rest, x :: y :: stack ->
-        let res = Stack.(((to_int32 x) = (to_int32 y)) |> of_bool) in
+        let res = Stack.(to_int32 x = to_int32 y |> of_bool) in
         eval_main iflevel (res :: stack) altstack rest
       | O Op_numequal :: _, _ ->
         invalid_arg "Run.eval: op_numequal without at least 2 stack elements"
       | O Op_numequalverify :: rest, x :: y :: stack ->
-        Stack.((to_int32 x) = (to_int32 y)), stack, rest
+        Stack.(to_int32 x = to_int32 y), stack, rest
       | O Op_numequalverify :: _, _ ->
         invalid_arg "Run.eval: op_numequalverify without at least 2 stack elements"
       | O Op_numnotequal :: rest, x :: y :: stack ->
-        let res = Stack.(((to_int32 x) <> (to_int32 y)) |> of_bool) in
+        let res = Stack.(to_int32 x <> to_int32 y |> of_bool) in
         eval_main iflevel (res :: stack) altstack rest
       | O Op_numnotequal :: _, _ ->
         invalid_arg "Run.eval: op_numnotequal without at least 2 stack elements"
       | O Op_lessthan :: rest, x :: y :: stack ->
-        let res = Stack.(((to_int32 x) < (to_int32 y)) |> of_bool) in
+        let res = Stack.(to_int32 x < to_int32 y |> of_bool) in
         eval_main iflevel (res :: stack) altstack rest
       | O Op_lessthan :: _, _ ->
         invalid_arg "Run.eval: op_lessthan without at least 2 stack elements"
       | O Op_greaterthan :: rest, x :: y :: stack ->
-        let res = Stack.(((to_int32 x) > (to_int32 y)) |> of_bool) in
+        let res = Stack.(to_int32 x > to_int32 y |> of_bool) in
         eval_main iflevel (res :: stack) altstack rest
       | O Op_greaterthan :: _, _ ->
         invalid_arg "Run.eval: op_greaterthan without at least 2 stack elements"
       | O Op_lessthanorequal :: rest, x :: y :: stack ->
-        let res = Stack.(((to_int32 x) <= (to_int32 y)) |> of_bool) in
+        let res = Stack.(to_int32 x <= to_int32 y |> of_bool) in
         eval_main iflevel (res :: stack) altstack rest
       | O Op_lessthanorequal :: _, _ ->
         invalid_arg "Run.eval: op_lessthanorequal without at least 2 stack elements"
       | O Op_greaterthanorequal :: rest, x :: y :: stack ->
-        let res = Stack.(((to_int32 x) >= (to_int32 y)) |> of_bool) in
+        let res = Stack.(to_int32 x >= to_int32 y |> of_bool) in
         eval_main iflevel (res :: stack) altstack rest
       | O Op_greaterthanorequal :: _, _ ->
         invalid_arg "Run.eval: op_greaterthanorequal without at least 2 stack elements"
       | O Op_min :: rest, x :: y :: stack ->
-        let res = Stack.((min (to_int32 x) (to_int32 y)) |> of_int32) in
+        let res = Stack.(min (to_int32 x) (to_int32 y) |> of_int32) in
         eval_main iflevel (res :: stack) altstack rest
       | O Op_min :: _, _ ->
         invalid_arg "Run.eval: op_min without at least 2 stack elements"
       | O Op_max :: rest, x :: y :: stack ->
-        let res = Stack.((max (to_int32 x) (to_int32 y)) |> of_int32) in
+        let res = Stack.(max (to_int32 x) (to_int32 y) |> of_int32) in
         eval_main iflevel (res :: stack) altstack rest
       | O Op_max :: _, _ ->
         invalid_arg "Run.eval: op_max without at least 2 stack elements"
@@ -815,27 +817,31 @@ module Run = struct
       | O Op_ripemd160 :: rest, v :: stack ->
         let digest =
           let open Digestif.RMD160 in
-          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v)))) in
+          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v))))
+        in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_ripemd160 :: _, _ ->
         invalid_arg "Run.eval: op_ripemd160 without a top stack element"
       | O Op_sha1 :: rest, v :: stack ->
         let digest =
           let open Digestif.SHA1 in
-          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v)))) in
+          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v))))
+        in
         eval_main iflevel (digest :: stack) altstack rest
-      | O Op_sha1 :: _, _ ->
-        invalid_arg "Run.eval: op_sha1 without a top stack element"
+      | O Op_sha1 :: _, _ -> invalid_arg "Run.eval: op_sha1 without a top stack element"
       | O Op_sha256 :: rest, v :: stack ->
         let open Digestif.SHA256 in
         let digest =
-          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v)))) in
+          Cstruct.(of_string (to_raw_string (digest_bigstring (to_bigarray v))))
+        in
         eval_main iflevel (digest :: stack) altstack rest
       | O Op_sha256 :: _, _ ->
         invalid_arg "Run.eval: op_sha256 without a top stack element"
       | O Op_hash160 :: rest, v :: stack ->
         let open Digestif in
-        let first_hash = SHA256.(to_raw_string (digest_bigstring (Cstruct.to_bigarray v))) in
+        let first_hash =
+          SHA256.(to_raw_string (digest_bigstring (Cstruct.to_bigarray v)))
+        in
         let second_hash = RMD160.(to_raw_string (digest_string first_hash)) in
         let digest = Cstruct.of_string second_hash in
         eval_main iflevel (digest :: stack) altstack rest
@@ -843,7 +849,9 @@ module Run = struct
         invalid_arg "Run.eval: op_hash160 without a top stack element"
       | O Op_hash256 :: rest, v :: stack ->
         let open Digestif in
-        let first_hash = SHA256.(to_raw_string (digest_bigstring (Cstruct.to_bigarray v))) in
+        let first_hash =
+          SHA256.(to_raw_string (digest_bigstring (Cstruct.to_bigarray v)))
+        in
         let second_hash = SHA256.(to_raw_string (digest_string first_hash)) in
         let digest = Cstruct.of_string second_hash in
         eval_main iflevel (digest :: stack) altstack rest
@@ -852,4 +860,5 @@ module Run = struct
       | _ -> invalid_arg "Run.eval: unsupported"
     in
     eval_main 0 [] [] code
+  ;;
 end

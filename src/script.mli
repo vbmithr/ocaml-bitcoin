@@ -125,6 +125,7 @@ module Element : sig
   type t =
     | O of Opcode.t
     | D of Cstruct.t
+
   val op_size_prefix : Cstruct.t -> t list
   val op_data : Cstruct.t -> t list
 end
@@ -133,20 +134,19 @@ type t = Element.t list [@@deriving sexp]
 
 val pp : Format.formatter -> t -> unit
 val size : t -> int
-
 val of_cstruct : ?pos:int -> ?len:int -> Cstruct.t -> t * Cstruct.t
 val to_cstruct : Cstruct.t -> Element.t list -> Cstruct.t
 val serialize : t -> Cstruct.t
-
 val hash160 : t -> Util.Hash160.t
 
 module Std : sig
   module P2PKH : sig
     open Libsecp256k1.External
+
     val scriptRedeem : BitcoinAddr.t -> t
 
-    val scriptSig : Context.t -> Cstruct.t -> Key.public Key.t -> t
     (** [scriptSig] is [[signature ; pkh]] *)
+    val scriptSig : Context.t -> Cstruct.t -> Key.public Key.t -> t
   end
 
   module P2SH : sig
