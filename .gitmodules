@@ -1,0 +1,6 @@
+[submodule "vendors/ocaml-base58"]
+	path = vendors/ocaml-base58
+	url = git@github.com:vbmithr/ocaml-base58
+[submodule "vendors/ocaml-murmur3"]
+	path = vendors/ocaml-murmur3
+	url = git@github.com:vbmithr/ocaml-murmur3
